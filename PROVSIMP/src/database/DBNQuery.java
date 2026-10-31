@@ -63,7 +63,7 @@ public class DBNQuery extends DBQuery{
 					      " WHERE username = '"+wboxid+"' AND arg = '"+p2+"' ";
 				// username, affiliation, curshared, wboxid, curindivid
 				 
-				ArrayList<HashMap<String,Object>> rs=dbcn.execSQL(sql);
+				ArrayList<HashMap<String,Object>> rs=execSQLOrEmpty(sql);
 				int used=0;
 				if(rs!=null && rs.size()>0){
 					used=1;
@@ -95,7 +95,7 @@ public class DBNQuery extends DBQuery{
 					      " WHERE ndid = '"+node+"' AND username = '"+wboxid+"'";
 				// username, affiliation, curshared, wboxid, curindivid
 				System.out.println(sql);
-				ArrayList<HashMap<String,Object>> rs=dbcn.execSQL(sql);
+				ArrayList<HashMap<String,Object>> rs=execSQLOrEmpty(sql);
 
 				if(rs!=null && rs.size()>0){
 					
@@ -123,7 +123,7 @@ public class DBNQuery extends DBQuery{
 					      " WHERE ndid = '"+node+"' AND used=0 AND username = '"+wboxid+"'";
 				// username, affiliation, curshared, wboxid, curindivid
 				System.out.println(sql);
-				ArrayList<HashMap<String,Object>> rs=dbcn.execSQL(sql);
+				ArrayList<HashMap<String,Object>> rs=execSQLOrEmpty(sql);
 
 				if(rs!=null && rs.size()>0){
 					array=new ArrayList();
@@ -155,7 +155,7 @@ public class DBNQuery extends DBQuery{
 				      " WHERE pathid = '"+pid+"' AND ndid = '"+node+"' AND username = '"+wboxid+"'";
 				// username, affiliation, curshared, wboxid, curindivid
 				 
-				ArrayList<HashMap<String,Object>> rs=dbcn.execSQL(sql);
+				ArrayList<HashMap<String,Object>> rs=execSQLOrEmpty(sql);
 
 				if(rs!=null && rs.size()>0){
 					HashMap<String, Object> res=rs.get(0);
@@ -182,7 +182,7 @@ public class DBNQuery extends DBQuery{
 					      " WHERE username = '"+wboxid+"' AND arg = '"+text+"' ";
 				// username, affiliation, curshared, wboxid, curindivid
 				 
-				ArrayList<HashMap<String,Object>> rs=dbcn.execSQL(sql);
+				ArrayList<HashMap<String,Object>> rs=execSQLOrEmpty(sql);
 				if(rs!=null && rs.size()>0){
 					 
 				}else{
@@ -198,7 +198,7 @@ public class DBNQuery extends DBQuery{
 				String sql = "SELECT * FROM CISPACES_PELEM" +
 					      " WHERE username = '" + user + "' ";
 				
-				ArrayList<HashMap<String,Object>> rsc=dbcn.execSQL(sql);
+				ArrayList<HashMap<String,Object>> rsc=execSQLOrEmpty(sql);
 				if(rsc!=null && rsc.size()>0){
 					ArrayList a=new ArrayList();
 					ArrayList b=new ArrayList();
@@ -256,7 +256,7 @@ public class DBNQuery extends DBQuery{
 						      " WHERE username = '"+user+"' AND element = '"+elem+"' ";
 					// username, affiliation, curshared, wboxid, curindivid
 					 
-					ArrayList<HashMap<String,Object>> rs=dbcn.execSQL(sql);
+					ArrayList<HashMap<String,Object>> rs=execSQLOrEmpty(sql);
 					if(rs!=null && rs.size()>0){
 						String  query="UPDATE CISPACES_PELEM "
 								+ " SET value = "+vl+" WHERE "

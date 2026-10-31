@@ -40,9 +40,13 @@ $ ./install-prereqs.sh
 
 ```$ mvn initialize```
 
-- Build and deploy the project using Maven
+- Build the project using Maven. This produces war files under each module's `target/` directory and does not copy them into Tomcat.
 
 ```$ mvn install```
+
+- Deploy the wars and the static UI into Tomcat (requires `CATALINA_HOME`):
+
+```$ ./deploy-to-tomcat.sh```
 
 ## Running
 

@@ -6,14 +6,18 @@
  * reprints for Government purposes notwithstanding any copyright notation
  * hereon.
  * **************************************************************************
- * 
+ *
  * This class connects to the database and uses database connection pool
  * The results are copied and handled here, then everything gets closed so not to create  memory leaks
- * 
- * @author      Alice Toniolo  
- * @version     2.0  
- * @since 		July 2017          
- *   
+ *
+ * Shared by VC, PROVSIMP, and info. VC reads every column as text so a Derby
+ * LOB is not consumed twice. PROVSIMP and info keep JDBC object values, which
+ * their queries cast to Integer.
+ *
+ * @author      Alice Toniolo
+ * @version     2.0
+ * @since       July 2017
+ *
  */
 
 
@@ -30,12 +34,20 @@ import javax.naming.InitialContext;
 import javax.naming.NamingException;
 
 
+
 public class DBConnect {
+
+		public enum ColumnValues {
+			/** Every column as a string. Used by VC. */
+			TEXT,
+			/** JDBC objects, with CLOBs read as strings. Used by PROVSIMP and info. */
+			OBJECT
+		}
 
 		private static Logger log;
         PreparedStatement deletePreparedStatement = null;
         PreparedStatement insertPreparedStatement = null;
-		
+
 		private Connection dbCon;
 		private boolean inTransaction;
 
@@ -53,8 +65,19 @@ public class DBConnect {
 			connectionFactory = factory;
 		}
 
+		private final ColumnValues columnValues;
+		private final boolean echoSql;
+
+
+		/** Object values, no SQL echo. Matches the PROVSIMP and info copies. */
 		public DBConnect(){
+			this(ColumnValues.OBJECT, false);
+		}
+
+		public DBConnect(ColumnValues columnValues, boolean echoSql){
 			log=Logger.getLogger(getClass().getName());
+			this.columnValues = columnValues;
+			this.echoSql = echoSql;
 		}
 
 		private Connection openConnection() throws SQLException, NamingException {
@@ -81,7 +104,7 @@ public class DBConnect {
 	            return false;
 	        }
 		}
-	 
+
 
 		public synchronized ArrayList<HashMap<String,Object>> execSQL(String sql) throws SQLException {
 			ResultSet rs = null;
@@ -92,9 +115,9 @@ public class DBConnect {
 				}
 				s= dbCon.createStatement();
 				rs= s.executeQuery(sql);
-		 
+
 			return convertResultSetToList(rs);
-			
+
 			}catch(SQLException e){
 				log.log(Level.SEVERE,"FAIL DB CONNECTION",e);
 				throw e;
@@ -112,23 +135,23 @@ public class DBConnect {
 			            s.close();
 			        } catch (SQLException e) { /* ignored */}
 			    }
-			    if (dbCon != null) {
-			        try {
-			        	dbCon.close();
-			        } catch (SQLException e) { /* ignored */}
+			    if (!inTransaction) {
+			        closeConnectionQuietly();
 			    }
 			}
 		}
-		
+
 		public synchronized boolean updateSQL(String sql){
 			boolean res=false;
 			Statement s = null;
 			try{
 				connect();
 				s = dbCon.createStatement();
-				System.out.println(sql);
+				if(echoSql){
+					System.out.println(sql);
+				}
 				s.executeUpdate(sql);
-		
+
 				res=true;
 			}catch(Exception e){
 				log.log(Level.SEVERE,"FAIL DB CONNECTION",e);
@@ -139,17 +162,15 @@ public class DBConnect {
 			            s.close();
 			        } catch (SQLException e) { /* ignored */}
 			    }
-			    if (dbCon != null) {
-			        try {
-			        	dbCon.close();
-			        } catch (SQLException e) { /* ignored */}
-			    } 
+			    if (!inTransaction) {
+			        closeConnectionQuietly();
+			    }
 			}
 			return res;
 		}
-		
-		 
-		
+
+
+
 		public synchronized boolean existTable(String table){
 			Statement s = null;
 			boolean res=false;
@@ -159,8 +180,8 @@ public class DBConnect {
 				String sql= "SELECT * FROM "+table;
 				s=dbCon.createStatement();
 				rs= s.executeQuery(sql);
-		 
-			
+
+
 			// check if "employee" table is there
 				if(rs!=null){
 					res=true;
@@ -180,21 +201,19 @@ public class DBConnect {
 				           s.close();
 				        } catch (SQLException e) { /* ignored */}
 				    }
-				    if (dbCon != null) {
-				        try {
-				        	dbCon.close();
-				        } catch (SQLException e) { /* ignored */}
+				    if (!inTransaction) {
+				        closeConnectionQuietly();
 				    }
-			 
+
 			}
-			//System.out.println(res);
 			return res;
 		}
 
+		/** Leaves the connection open for a later statement on this instance. */
 		public void tryConnect(){
 			connect();
 		}
-	
+
 		private ArrayList<HashMap<String,Object>> convertResultSetToList(ResultSet rs) throws SQLException {
 		    ResultSetMetaData md = rs.getMetaData();
 		    int columns = md.getColumnCount();
@@ -203,18 +222,16 @@ public class DBConnect {
 		    while (rs.next()) {
 		        HashMap<String,Object> row = new HashMap<String, Object>(columns);
 		        for(int i=1; i<=columns; ++i) {
-		        	//import org.apache.derby.client.am.Clob;
-                    /*
-                    j.robinson@software.ac.uk - 
-                    Prevent Exception - java.sql.SQLException: Stream or LOB value cannot be retrieved more than once
-                    http://db.apache.org/derby/releases/release-10.6.1.0.cgi#Note+for+DERBY-3844
-                    
-		        	Object test=rs.getObject(i);
-		        	if(test instanceof java.sql.Clob){
-		        		test=rs.getString(i);
-		        	}
-                    */
-                    String test=rs.getString(i);
+		            Object test;
+		            if(columnValues == ColumnValues.TEXT){
+		                // getString avoids reading a Derby LOB stream twice.
+		                test = rs.getString(i);
+		            }else{
+		                test = rs.getObject(i);
+		                if(test instanceof java.sql.Clob){
+		                    test = rs.getString(i);
+		                }
+		            }
 		            row.put(md.getColumnName(i).toLowerCase(),test);
 		        }
 		        list.add(row);
@@ -223,7 +240,7 @@ public class DBConnect {
 		    return list;
 		}
 
-		 
+
 
 		public void forceClose() {
 			 if (dbCon != null) {
@@ -231,7 +248,7 @@ public class DBConnect {
 			        	dbCon.close();
 			        } catch (SQLException e) { /* ignored */}
 			    }
-			
+
 		}
 
 
@@ -394,17 +411,6 @@ public class DBConnect {
 		}
 	}
 
-
-//	public void setAutoCommit(boolean b) {
-//		try {
-//		    tryConnect();
-//			this.dbCon.setAutoCommit(b);
-//			dbCon.close();
-//		} catch (SQLException e) {
-//			e.printStackTrace();
-//		}
-//	}
-
     public void prepareDeleteStatementInTransaction(String sql) {
         try {
             deletePreparedStatement = dbCon.prepareStatement(sql);
@@ -430,27 +436,3 @@ public class DBConnect {
         }
     }
 }
-
-
-/*
- * A database connection pool creates and manages a pool of connections to a database. Recycling and reusing already existing connections to a database is more efficient than opening a new connection.
-
-There is one problem with connection pooling. A web application has to explicitly close ResultSet's, Statement's, and Connection's. Failure of a web application to close these resources can result in them never being available again for reuse, a database connection pool "leak". This can eventually result in your web application database connections failing if there are no more available connections.
-
-There is a solution to this problem. The Apache Commons DBCP can be configured to track and recover these abandoned database connections. Not only can it recover them, but also generate a stack trace for the code which opened these resources and never closed them.
-
-To configure a DBCP DataSource so that abandoned database connections are removed and recycled add the following attribute to the Resource configuration for your DBCP DataSource:
-
-removeAbandoned="true"
-When available database connections run low DBCP will recover and recycle any abandoned database connections it finds. The default is false.
-
-Use the removeAbandonedTimeout attribute to set the number of seconds a database connection has been idle before it is considered abandoned.
-
-removeAbandonedTimeout="60"
-The default timeout for removing abandoned connections is 300 seconds.
-
-The logAbandoned attribute can be set to true if you want DBCP to log a stack trace of the code which abandoned the database connection resources.
-
-logAbandoned="true"
-The default is false.
-*/

@@ -19,7 +19,7 @@
 package infocontrol;
 
  
-import gaian.DBConnect;
+import database.DBConnect;
 import gaian.DBQuery;
 
 import java.util.ArrayList;
@@ -42,7 +42,7 @@ public class InfoInput {
  
 	public InfoInput() {
 
-		jsh=new JsonHelper();
+		jsh=new JsonHelper(true, false);
 
 		DBConnect dbcn=new DBConnect();
 		dbc=new DBQuery(dbcn);

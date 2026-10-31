@@ -81,7 +81,7 @@ public class ERSServlet {
 		 }
 	  
 	  //changes for NLG now we have action field
-	  jsh=new JsonHelper();
+	  jsh=new JsonHelper(false, true);
 	  String output = null;
 	  HashMap map=jsh.convertInputMap(input);
 		if(map.isEmpty()){

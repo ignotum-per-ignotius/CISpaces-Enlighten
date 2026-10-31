@@ -11,28 +11,5 @@
 
     <build>
         <finalName>ROOT</finalName>
-        <plugins>
-            <plugin>
-                <artifactId>maven-resources-plugin</artifactId>
-                <version>3.0.2</version>
-                <executions>
-                    <execution>
-                        <id>copy-resources</id>
-                        <phase>install</phase>
-                        <goals>
-                            <goal>copy-resources</goal>
-                        </goals>
-                        <configuration>
-                            <outputDirectory>${env.CATALINA_HOME}/webapps/ROOT</outputDirectory>
-                            <resources>
-                                <resource>
-                                    <directory>WebContent</directory>
-                                </resource>
-                            </resources>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-        </plugins>
     </build>
 </project>

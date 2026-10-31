@@ -26,6 +26,16 @@ if [ "${yes}" != 'true' ]; then read stopgo; if [ "$stopgo" == "n" ]; then exit 
 
 echo
 echo "Looking for CISpaces Web Services..."
+webapps="cispaces/tools/tomcat/webapps"
+mkdir -p "${webapps}"
+shopt -s nullglob
+for war in VC/target/*.war FEWS/target/*.war ers/target/*.war nlg/target/*.war PROVSIMP/target/*.war provgraphs/target/*.war info/target/*.war; do
+    cp "${war}" "${webapps}/"
+done
+if [ -d ROOT/WebContent ]; then
+    mkdir -p "${webapps}/ROOT"
+    cp -a ROOT/WebContent/. "${webapps}/ROOT/"
+fi
 find cispaces/tools/tomcat/ | grep war$
 if [ $? -ne 0 ]; then
         echo "# Failed to find CISpaces Web Services to package - did you run 'mvn install'?"

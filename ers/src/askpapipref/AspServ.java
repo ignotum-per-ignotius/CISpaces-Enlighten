@@ -61,7 +61,7 @@ public class AspServ implements AskpapiInterf{
 	private boolean test1;
  
 	public AspServ() {
-	 jsh=new JsonHelper();
+	 jsh=new JsonHelper(false, true);
 	 rbuild=new RuleBuilder();
 	 arbc=new HashMap();
 	 arbi=new HashMap();

@@ -17,6 +17,7 @@
 
 package gaian;
 
+import database.DBConnect;
 import infocontrol.InfoProvBuild;
 import infocontrol.User;
 
@@ -112,7 +113,7 @@ private int limit=1000000;
 		sql = "SELECT * FROM CISPACES_INFOTMP" +
 		      " WHERE username = '" + usertry.getUser() + "' AND affiliation = '"+usertry.getAff()+"'";
 		//System.out.println(sql+ " ");
-		ArrayList<HashMap<String,Object>> rs=dbcn.execSQL(sql);
+		ArrayList<HashMap<String,Object>> rs=execSQLOrEmpty(sql);
 		User user=null;
 		if(rs!=null && rs.size()>0){
 				HashMap<String, Object> map=rs.get(0);
@@ -162,7 +163,7 @@ private int limit=1000000;
 		String text,id;
 		 
 		
-		ArrayList<HashMap<String,Object>> rs=dbcn.execSQL(sql);
+		ArrayList<HashMap<String,Object>> rs=execSQLOrEmpty(sql);
 	 
 		if(rs!=null && rs.size()>0){
 				list=new ArrayList();
@@ -191,7 +192,7 @@ private int limit=1000000;
 		int id = 0;
 		//Table CISPACES_INFOND
 		// *  |id|affiliation|setid|text|
-		ArrayList<HashMap<String,Object>> rs=dbcn.execSQL(sql);
+		ArrayList<HashMap<String,Object>> rs=execSQLOrEmpty(sql);
 		if(rs!=null && rs.size()>0){
 				HashMap<String, Object> res=rs.get(0);
 				id=(int) res.get("nodeid");
@@ -200,7 +201,7 @@ private int limit=1000000;
 		sql="SELECT id FROM CISPACES_NODEMAP" +
 				      " WHERE id = "+id;
 			//	System.out.println(sql);
-		rs=dbcn.execSQL(sql);
+		rs=execSQLOrEmpty(sql);
 		if(rs!=null && rs.size()>0){
 				HashMap<String, Object> res=rs.get(0);
 					id=(int) res.get("id");
@@ -285,7 +286,7 @@ private int limit=1000000;
 		ArrayList list=new ArrayList();
 		HashMap map;
 		String text,id;
-		ArrayList<HashMap<String,Object>> rs=dbcn.execSQL(sql);
+		ArrayList<HashMap<String,Object>> rs=execSQLOrEmpty(sql);
 		if(rs!=null && rs.size()>0){
 				for(HashMap<String, Object> res:rs){
 					map=new HashMap();
@@ -298,7 +299,7 @@ private int limit=1000000;
 		}
 		sql = "SELECT nodeID,text FROM CISPACES_INFOND" +
 								" WHERE affiliation = '"+user+"' AND setid = 1";
-		rs=dbcn.execSQL(sql);
+		rs=execSQLOrEmpty(sql);
 		if(rs!=null && rs.size()>0){
 			ArrayList other=new ArrayList();
 		
@@ -336,7 +337,7 @@ private int limit=1000000;
 		// *  |id|affiliation|setid|text|
  
 		String id =null;
-		ArrayList<HashMap<String,Object>> rs=dbcn.execSQL(sql);
+		ArrayList<HashMap<String,Object>> rs=execSQLOrEmpty(sql);
 		if(rs!=null && rs.size()>0){
 				HashMap<String, Object> res=rs.get(0);
 				id=(String) res.get("curindivid"); 
@@ -354,7 +355,7 @@ private int limit=1000000;
 	//System.out.println(sql+ " ");
  
 	String chain=null;
-	ArrayList<HashMap<String,Object>> rs=dbcn.execSQL(sql);
+	ArrayList<HashMap<String,Object>> rs=execSQLOrEmpty(sql);
 	ArrayList clobs=new ArrayList();
 	if(rs!=null && rs.size()>0){
 			HashMap<String, Object> res=rs.get(0);
@@ -364,7 +365,7 @@ private int limit=1000000;
 				clobs.add(chain);
 				sql = "SELECT * FROM CISPACES_INFOPROV" +
 					      " WHERE wboxid = '" + chain + "' ";
-				ArrayList<HashMap<String,Object>> rsc=dbcn.execSQL(sql);
+				ArrayList<HashMap<String,Object>> rsc=execSQLOrEmpty(sql);
 				if(rsc!=null && rsc.size()>0){
 						HashMap<String, Object> ris=rsc.get(0);
 						chain=(String) ris.get("chaining");
@@ -463,7 +464,7 @@ private int limit=1000000;
 		//System.out.println(sql+ " ");
 		String model=null;
 		String chain=null;
-		ArrayList<HashMap<String,Object>> rs=dbcn.execSQL(sql);
+		ArrayList<HashMap<String,Object>> rs=execSQLOrEmpty(sql);
 		if(rs!=null && rs.size()>0){
 				HashMap<String, Object> res=rs.get(0);
 				model= (String) res.get("provst");
@@ -475,7 +476,7 @@ private int limit=1000000;
 				 
 					sql = "SELECT * FROM CISPACES_INFOPROV" +
 						      " WHERE wboxid = '" + chain + "' ";
-					ArrayList<HashMap<String,Object>> rsc=dbcn.execSQL(sql);
+					ArrayList<HashMap<String,Object>> rsc=execSQLOrEmpty(sql);
 					 
 					if(rsc!=null && rsc.size()>0){
 							HashMap<String, Object> ris=rs.get(0);
@@ -503,7 +504,7 @@ private int limit=1000000;
 			//System.out.println(sql+ " ");
 			int lockint;
 			boolean lock = false;
-			ArrayList<HashMap<String,Object>> rs=dbcn.execSQL(sql);
+			ArrayList<HashMap<String,Object>> rs=execSQLOrEmpty(sql);
 	//	System.out.println(rs);
 			if(rs!=null && rs.size()>0){
 					HashMap<String, Object> res=rs.get(0);
@@ -536,7 +537,7 @@ private int limit=1000000;
 	//	 System.out.println(sql+ " ");
 	 
 		boolean resp=false;
-		ArrayList<HashMap<String,Object>> rs=dbcn.execSQL(sql);
+		ArrayList<HashMap<String,Object>> rs=execSQLOrEmpty(sql);
 	 
 		if(rs!=null && rs.size()>0){
 				HashMap<String, Object> res=rs.get(0);
@@ -574,7 +575,7 @@ private int limit=1000000;
 		String sql = "SELECT nodeID,affiliation FROM CISPACES_INFOND" +
 			      " WHERE nodeID = '"+nodeid+"' AND affiliation = '"+dest+"'";
 			 boolean res=true;
-				ArrayList<HashMap<String,Object>> rs=dbcn.execSQL(sql);
+				ArrayList<HashMap<String,Object>> rs=execSQLOrEmpty(sql);
 			 
 				if(rs!=null && rs.size()>0){
 						res=false;
@@ -604,7 +605,7 @@ private int limit=1000000;
 		ArrayList list=null;
 		HashMap map;
 		String text,id;
-		ArrayList<HashMap<String,Object>> rs=dbcn.execSQL(sql);
+		ArrayList<HashMap<String,Object>> rs=execSQLOrEmpty(sql);
 		 
 		if(rs!=null && rs.size()>0){
 				list=new ArrayList();
@@ -635,7 +636,7 @@ private int limit=1000000;
 			//System.out.println(sql+ " ");
 			 
 			
-			ArrayList<HashMap<String,Object>> rs=dbcn.execSQL(sql);
+			ArrayList<HashMap<String,Object>> rs=execSQLOrEmpty(sql);
 			 
 			if(rs!=null && rs.size()>0){
 					
@@ -658,7 +659,7 @@ private int limit=1000000;
 		sql = "SELECT  affiliation, MAX(setid) FROM CISPACES_INFOND " +
 		      " GROUP BY affiliation ";
 		//System.out.println(sql+ " ");
-		rs=dbcn.execSQL(sql);
+		rs=execSQLOrEmpty(sql);
 		 
 		if(rs!=null && rs.size()>0){
 				for(HashMap<String, Object> res:rs){
@@ -674,7 +675,7 @@ private int limit=1000000;
 		sql = "SELECT  affiliation, MAX(lastset) FROM CISPACES_INFOTMP " +
 		      " GROUP BY affiliation ";
 		//System.out.println(sql+ " ");
-	    rs=dbcn.execSQL(sql);
+	    rs=execSQLOrEmpty(sql);
 		 
 		if(rs!=null && rs.size()>0){
 				for(HashMap<String, Object> chk:rs){
@@ -696,7 +697,7 @@ private int limit=1000000;
 		sql = "SELECT * FROM CISPACES_INFOTMP" +
 		      " WHERE username = 'b0f9f703-844c-4b70-aaaa-897d204fc24e' AND affiliation='99d42973-d0ba-4082-88f8-dcc2522cf796'";
 		//System.out.println(sql+ " ");
-		ArrayList<HashMap<String,Object>> rs=dbcn.execSQL(sql);
+		ArrayList<HashMap<String,Object>> rs=execSQLOrEmpty(sql);
 		 
 		if(rs!=null && rs.size()>0){
 				 
@@ -724,6 +725,19 @@ private int limit=1000000;
 	public void closeDataBase() {
 		dbcn.forceClose();
 		
+	}
+
+	/** A failed query is an empty list, so callers can use isEmpty() without a null check. */
+	private ArrayList<HashMap<String,Object>> execSQLOrEmpty(String sql) {
+		try {
+			ArrayList<HashMap<String,Object>> rows = dbcn.execSQL(sql);
+			if (rows == null) {
+				return new ArrayList<HashMap<String,Object>>();
+			}
+			return rows;
+		} catch (SQLException failure) {
+			return new ArrayList<HashMap<String,Object>>();
+		}
 	}
 
  

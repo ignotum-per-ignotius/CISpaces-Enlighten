@@ -47,7 +47,7 @@ import javax.servlet.http.HttpServletResponse;
 
 
 
-import provservice.JsonHelper;
+import utils.JsonHelper;
 
 import com.google.gson.internal.LinkedTreeMap;
 
@@ -99,7 +99,7 @@ public class PlotProvServlet extends HttpServlet implements javax.servlet.Servle
     	try {
   		  String content = new String(Files.readAllBytes(Paths.get(ci_path+"/code/config/cis_settings.txt")));
   		  //System.out.println(content);
-  		  jsh=new JsonHelper();
+  		  jsh=new JsonHelper(true, false);
   		  HashMap settings=jsh.convertInputMap(content);
   		  LinkedTreeMap servers=(LinkedTreeMap) settings.get("Servers");
   		  LinkedTreeMap provd=(LinkedTreeMap) servers.get("ProvDM");

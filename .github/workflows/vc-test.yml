@@ -21,4 +21,4 @@ jobs:
           tar -xzf /tmp/maven.tgz -C "$HOME/maven"
           echo "$HOME/maven/apache-maven-3.8.8/bin" >> "$GITHUB_PATH"
       - name: Run VC tests
-        run: mvn -pl VC test
+        run: mvn -pl VC -am test

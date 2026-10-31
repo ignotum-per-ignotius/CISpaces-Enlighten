@@ -27,6 +27,16 @@ import org.json.simple.JSONObject;
 
 public class VControl {
 
+    private final DBQuery dbQuery;
+
+    public VControl() {
+        this(new DBQuery());
+    }
+
+    public VControl(DBQuery dbQuery) {
+        this.dbQuery = dbQuery;
+    }
+
     /**
      * The workbench key is {@code islocked}. Null means the payload omitted it,
      * so an update leaves the stored lock unchanged. A present value is stored.
@@ -59,11 +69,10 @@ public class VControl {
         Boolean lockFlag = lockedFlag(map);
         boolean isLocked = lockFlag != null && lockFlag.booleanValue();
 
-        DBQuery dbQuery = new DBQuery();
-        dbQuery.insertEdge(toID, fromID, formEdgeID, edgeID, graphID, isLocked);
+        boolean stored = dbQuery.insertEdge(toID, fromID, formEdgeID, edgeID, graphID, isLocked);
 
         map = new HashMap();
-        map.put("response","success");
+        map.put("response", stored ? "success" : "fail");
 
         return map;
     }
@@ -131,11 +140,10 @@ public class VControl {
 
         Boolean isLocked = lockedFlag(map);
 
-        DBQuery dbQuery = new DBQuery();
-        dbQuery.insertNode(nodeID, source, uncert, eval, txt, input, timestamp, commit, type, annot, graphID, isLocked);
+        boolean stored = dbQuery.insertNode(nodeID, source, uncert, eval, txt, input, timestamp, commit, type, annot, graphID, isLocked);
 
         map = new HashMap();
-        map.put("response","success");
+        map.put("response", stored ? "success" : "fail");
 
         return map;
     }

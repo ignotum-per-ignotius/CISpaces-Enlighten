@@ -10,7 +10,7 @@ import utils.JsonHelper;
 public class AIFDBConverter {
 
 	public LinkedTreeMap convertToAIFDB(LinkedTreeMap mgraph) {
-		JsonHelper jsh=new JsonHelper();
+		JsonHelper jsh=new JsonHelper(false, true);
 	//	System.out.println("do I caome here");
 		//String hb=jsh.convertInputJson(mgraph);
 		//System.out.println(hb);

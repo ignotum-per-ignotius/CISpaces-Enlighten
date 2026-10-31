@@ -19,7 +19,7 @@
 package infocontrol;
 
  
-import gaian.DBConnect;
+import database.DBConnect;
 import gaian.DBQuery;
 
 import java.util.ArrayList;
@@ -46,7 +46,7 @@ public class InfoControl {
  
 	public InfoControl(HashMap map, int ite, boolean rgen) {
 		rand_gen=rgen;
-		jsh=new JsonHelper();
+		jsh=new JsonHelper(true, false);
 		in=map;
 		/*
 		 *String dbURL = "jdbc:derby://localhost:6414/gaiandb";

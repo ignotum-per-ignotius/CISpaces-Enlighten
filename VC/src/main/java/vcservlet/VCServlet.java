@@ -428,7 +428,7 @@ public class VCServlet {
     @JWTTokenNeeded
     @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.APPLICATION_JSON)
-    public String getJSONInputEdge(String edge){
+    public Response getJSONInputEdge(String edge){
         log.log(Level.INFO, "*** VERSION CONTROL SERVICE - New Edge Request ***");
         requireEdgeMutation(edge);
 
@@ -442,7 +442,7 @@ public class VCServlet {
 
         log.log(Level.INFO,"*** VERSION CONTROL SERVICE - Edge Request Handled ***");
 
-        return out;
+        return writeResponse(out);
     }
 
 
@@ -456,7 +456,7 @@ public class VCServlet {
     @JWTTokenNeeded
     @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.APPLICATION_JSON)
-    public String getJSONInputNode(String json){
+    public Response getJSONInputNode(String json){
         log.log(Level.INFO, "*** VERSION CONTROL SERVICE - New Node Request ***");
         requireNodeMutation(json);
 
@@ -470,7 +470,7 @@ public class VCServlet {
 
         log.log(Level.INFO,"*** VERSION CONTROL SERVICE - Node Request Handled ***");
 
-        return out;
+        return writeResponse(out);
     }
 
     /**
@@ -483,12 +483,12 @@ public class VCServlet {
     @JWTTokenNeeded
     @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.APPLICATION_JSON)
-    public String putEdge(String json){
+    public Response putEdge(String json){
         log.log(Level.INFO, "*** VERSION CONTROL SERVICE - Put Edge Request ***");
         requireEdgeMutation(json);
         VCForkControl vcControl = new VCForkControl();
         try {
-            return vcControl.evalJSONEdge(json);
+            return writeResponse(vcControl.evalJSONEdge(json));
         } catch (SQLException e) {
             throw databaseError(e);
         }
@@ -504,15 +504,27 @@ public class VCServlet {
     @JWTTokenNeeded
     @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.APPLICATION_JSON)
-    public String putNode(String json){
+    public Response putNode(String json){
         log.log(Level.INFO, "*** VERSION CONTROL SERVICE - Put Node Request ***");
         requireNodeMutation(json);
         VCForkControl vcControl = new VCForkControl();
         try {
-            return vcControl.evalJSONNode(json);
+            return writeResponse(vcControl.evalJSONNode(json));
         } catch (SQLException e) {
             throw databaseError(e);
         }
+    }
+
+    /**
+     * A failed database write is not reported as success.
+     * The body still carries the {@code response} field from {@link vcontrol.VControl}.
+     */
+    static Response writeResponse(String out) {
+        int status = Response.Status.OK.getStatusCode();
+        if (out != null && out.contains("\"response\":\"fail\"")) {
+            status = Response.Status.INTERNAL_SERVER_ERROR.getStatusCode();
+        }
+        return Response.status(status).type(MediaType.APPLICATION_JSON).entity(out).build();
     }
 
 
