@@ -35,11 +35,11 @@ public class JWTTokenNeededFilter implements Filter {
         HttpServletRequest httpRequest = (HttpServletRequest) request;
         HttpServletResponse httpResponse = (HttpServletResponse) response;
 
+        // Get the HTTP Authorization header from the request. Do not log the header or the token.
         String authorizationHeader = httpRequest.getHeader(HttpHeaders.AUTHORIZATION);
-        log.info("#### authorizationHeader : " + authorizationHeader);
 
         if (authorizationHeader == null || !authorizationHeader.startsWith("Bearer ")) {
-            log.severe("#### invalid authorizationHeader : " + authorizationHeader);
+            log.severe("#### missing or malformed Authorization header");
             httpResponse.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             return;
         }
@@ -49,9 +49,9 @@ public class JWTTokenNeededFilter implements Filter {
         try {
             Key key = KeyGenerator.generateKey();
             Jwts.parser().setSigningKey(key).parseClaimsJws(token);
-            log.info("#### valid token : " + token);
+            log.info("#### valid token");
         } catch (Exception e) {
-            log.severe("#### invalid token : " + token);
+            log.severe("#### invalid token");
             httpResponse.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             return;
         }
