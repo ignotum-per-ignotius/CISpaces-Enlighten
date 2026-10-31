@@ -124,11 +124,68 @@ public class AnalysisImportTest {
     }
 
     @Test
+    public void mismatchedNodeGraphIdDoesNotCrossWriteOrEmptySource() throws Exception {
+        DBQuery query = new DBQuery();
+        assertTrue(query.insertGraph("owned-graph", "user-1", Timestamp.valueOf("2017-11-15 14:28:40"),
+                "Owned", "stays", false, null));
+        assertTrue(query.insertGraph("other-graph", "user-2", Timestamp.valueOf("2017-11-15 14:28:40"),
+                "Other", "not ours", false, null));
+        insertClaim(query, "owned-node", "owned-graph", "owned claim");
+        insertClaim(query, "other-node", "other-graph", "other claim");
+
+        java.util.HashMap<String, Object> snapshot = new java.util.HashMap<String, Object>();
+        snapshot.put("graphID", "owned-graph");
+        java.util.List<java.util.Map<String, String>> nodes = new java.util.ArrayList<java.util.Map<String, String>>();
+        nodes.add(node("injected-node", "other-graph", "stolen"));
+        snapshot.put("nodes", nodes);
+        snapshot.put("edges", new java.util.ArrayList<Object>());
+
+        assertFalse(query.updateAnalysis(snapshot));
+        assertEquals(new HashSet<String>(java.util.Arrays.asList("owned claim")),
+                nodeTexts(new JSONObject(query.getAnalysis("owned-graph")).getJSONArray("nodes")));
+        assertEquals(new HashSet<String>(java.util.Arrays.asList("other claim")),
+                nodeTexts(new JSONObject(query.getAnalysis("other-graph")).getJSONArray("nodes")));
+    }
+
+    @Test
+    public void mismatchedEdgeGraphIdDoesNotCrossWriteOrEmptySource() throws Exception {
+        DBQuery query = new DBQuery();
+        assertTrue(query.insertGraph("owned-for-edge", "user-1", Timestamp.valueOf("2017-11-15 14:28:40"),
+                "Owned", "stays", false, null));
+        assertTrue(query.insertGraph("victim-graph", "user-2", Timestamp.valueOf("2017-11-15 14:28:40"),
+                "Victim", "not ours", false, null));
+        insertClaim(query, "owned-edge-node", "owned-for-edge", "still here");
+        insertClaim(query, "victim-node", "victim-graph", "victim claim");
+
+        java.util.HashMap<String, Object> snapshot = new java.util.HashMap<String, Object>();
+        snapshot.put("graphID", "owned-for-edge");
+        java.util.List<java.util.Map<String, String>> nodes = new java.util.ArrayList<java.util.Map<String, String>>();
+        nodes.add(node("owned-edge-node", "owned-for-edge", "still here"));
+        snapshot.put("nodes", nodes);
+        java.util.List<java.util.Map<String, String>> edges = new java.util.ArrayList<java.util.Map<String, String>>();
+        java.util.Map<String, String> edge = new java.util.HashMap<String, String>();
+        edge.put("edgeID", "injected-edge");
+        edge.put("source", "victim-node");
+        edge.put("target", "victim-node");
+        edge.put("graphID", "victim-graph");
+        edges.add(edge);
+        snapshot.put("edges", edges);
+
+        assertFalse(query.updateAnalysis(snapshot));
+        assertEquals(new HashSet<String>(java.util.Arrays.asList("still here")),
+                nodeTexts(new JSONObject(query.getAnalysis("owned-for-edge")).getJSONArray("nodes")));
+        assertEquals(0, new JSONObject(query.getAnalysis("owned-for-edge")).getJSONArray("edges").length());
+        assertEquals(new HashSet<String>(java.util.Arrays.asList("victim claim")),
+                nodeTexts(new JSONObject(query.getAnalysis("victim-graph")).getJSONArray("nodes")));
+        assertEquals(0, new JSONObject(query.getAnalysis("victim-graph")).getJSONArray("edges").length());
+    }
+
+    @Test
     public void quotedIdentifierDoesNotMatchOtherGraphs() throws Exception {
         DBQuery query = new DBQuery();
         assertTrue(query.insertGraph("owned", "user-1", Timestamp.valueOf("2017-11-15 14:28:40"),
                 "Owned", "stays", false, null));
-        insertClaim(query, "owned-node", "owned", "keep me");
+        insertClaim(query, "quote-owned-node", "owned", "keep me");
 
         String injected = "owned' OR '1'='1";
         assertNull(query.getAnalysis(injected));

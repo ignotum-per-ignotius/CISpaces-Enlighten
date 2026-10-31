@@ -560,12 +560,16 @@ public class DBQuery {
             log.log(Level.SEVERE, "updateAnalysis snapshot is missing graphID, nodes, or edges");
             return false;
         }
+        String oldGraphID = obj.getString("graphID").trim();
+        if (oldGraphID.isEmpty() || !elementsTargetGraph(obj, oldGraphID)) {
+            log.log(Level.SEVERE, "updateAnalysis rejected a snapshot whose node or edge graphID does not match the owned graph");
+            return false;
+        }
 
         if (!dbcn.beginTransaction()) {
             return false;
         }
         try {
-            String oldGraphID = obj.getString("graphID");
             if (!dbcn.executeUpdate("DELETE FROM CISPACES_NODE WHERE GRAPHID = ?", oldGraphID)) {
                 dbcn.rollback();
                 return false;
@@ -579,10 +583,6 @@ public class DBQuery {
             for (int i = 0; i < nodes.length(); i++) {
                 org.json.JSONObject node = nodes.getJSONObject(i);
                 String nodeID = tryToGet(node, "nodeID");
-                String graphID = firstString(node, "graphID", "graphid");
-                if (graphID == null) {
-                    graphID = oldGraphID;
-                }
                 String commit = firstString(node, "commit", "cmt");
                 if (!dbcn.executeUpdate(
                         "INSERT INTO CISPACES_NODE (nodeid, source, uncert, eval, txt, inp, dtg, cmt, type, annot, graphid, islocked) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -596,7 +596,7 @@ public class DBQuery {
                         sqlString(commit),
                         sqlString(tryToGet(node, "type")),
                         sqlString(annotForStorage(node)),
-                        sqlString(graphID),
+                        sqlString(oldGraphID),
                         Boolean.valueOf(parseBooleanFlag(firstString(node, "islocked", "isLocked"))))) {
                     dbcn.rollback();
                     return false;
@@ -606,17 +606,13 @@ public class DBQuery {
             org.json.JSONArray edges = obj.getJSONArray("edges");
             for (int i = 0; i < edges.length(); i++) {
                 org.json.JSONObject edge = edges.getJSONObject(i);
-                String graphID = firstString(edge, "graphID", "graphid");
-                if (graphID == null) {
-                    graphID = oldGraphID;
-                }
                 if (!dbcn.executeUpdate(
                         "INSERT INTO CISPACES_EDGE (edgeID, target, source, formEdgeID, graphID, islocked) VALUES (?, ?, ?, ?, ?, ?)",
                         sqlString(firstString(edge, "edgeID", "edgeid")),
                         sqlString(tryToGet(edge, "target")),
                         sqlString(tryToGet(edge, "source")),
                         sqlString(firstString(edge, "formedgeid", "formEdgeID")),
-                        sqlString(graphID),
+                        sqlString(oldGraphID),
                         Boolean.valueOf(parseBooleanFlag(firstString(edge, "islocked", "isLocked"))))) {
                     dbcn.rollback();
                     return false;
@@ -631,6 +627,36 @@ public class DBQuery {
         }
     }
 
+
+    /**
+     * Every node and edge must name the snapshot graph, or omit a graph id.
+     * A different id is rejected so an import cannot write into another analysis.
+     */
+    public static boolean elementsTargetGraph(org.json.JSONObject snapshot, String graphID) {
+        if (snapshot == null || graphID == null || graphID.trim().isEmpty()) {
+            return false;
+        }
+        String expected = graphID.trim();
+        return arrayTargetsGraph(snapshot.optJSONArray("nodes"), expected)
+                && arrayTargetsGraph(snapshot.optJSONArray("edges"), expected);
+    }
+
+    private static boolean arrayTargetsGraph(org.json.JSONArray elements, String expected) {
+        if (elements == null) {
+            return false;
+        }
+        for (int i = 0; i < elements.length(); i++) {
+            org.json.JSONObject element = elements.optJSONObject(i);
+            if (element == null) {
+                return false;
+            }
+            String nested = firstString(element, "graphID", "graphid");
+            if (nested != null && !nested.trim().equals(expected)) {
+                return false;
+            }
+        }
+        return true;
+    }
 
     public static String tryToGet(org.json.JSONObject jsonObj, String key) {
         if (jsonObj == null || key == null || !jsonObj.has(key) || jsonObj.isNull(key)) {

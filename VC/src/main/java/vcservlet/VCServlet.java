@@ -532,7 +532,11 @@ public class VCServlet {
     @Consumes(MediaType.APPLICATION_JSON)
     public Response updateAnalysis(String analysis){
         log.log(Level.INFO, "*** VERSION CONTROL SERVICE - Update Analysis Request");
-        requireGraphOwner(stringField(analysis, "graphID"));
+        String graphId = stringField(analysis, "graphID");
+        requireGraphOwner(graphId);
+        if (!snapshotTargetsGraph(analysis, graphId)) {
+            throw new WebApplicationException(Response.Status.BAD_REQUEST);
+        }
 
         VCForkControl vcForkControl = new VCForkControl();
         if (!vcForkControl.evalJSONUpdateAnalysis(analysis)) {
@@ -589,6 +593,14 @@ public class VCServlet {
         String existingGraph = new DBQuery().graphIdOfEdge(stringField(json, "edgeID"));
         if (existingGraph != null) {
             requireGraphOwner(existingGraph);
+        }
+    }
+
+    private static boolean snapshotTargetsGraph(String analysis, String graphId) {
+        try {
+            return DBQuery.elementsTargetGraph(new JSONObject(analysis), graphId);
+        } catch (RuntimeException ex) {
+            return false;
         }
     }
 
