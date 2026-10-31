@@ -18,6 +18,7 @@ import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -193,6 +194,37 @@ public class AnalysisImportTest {
         JSONArray remaining = new JSONObject(query.getAnalysis("owned")).getJSONArray("nodes");
         assertEquals(1, remaining.length());
         assertEquals("keep me", remaining.getJSONObject(0).getString("text"));
+    }
+
+    @Test
+    public void secondUserCannotReadUnsharedGraph() throws Exception {
+        DBQuery query = new DBQuery();
+        assertTrue(query.insertGraph("private-read-graph", "user-1", Timestamp.valueOf("2017-11-15 14:28:40"),
+                "Private", "owner only", false, null));
+        insertClaim(query, "secret-read-node", "private-read-graph", "secret claim");
+        assertTrue(query.saveLatestAnalysis("private-read-graph", "user-1", "snapshot").contains("\"status\":true"));
+
+        assertNull(query.getAnalysis("private-read-graph", "user-2"));
+        assertNull(query.getAnalysisMeta("private-read-graph", "user-2"));
+        assertNull(query.getHistoryOfAnalysis("private-read-graph", "user-2"));
+        assertNull(query.getAnalysis("private-read-graph", "  "));
+
+        JSONObject owned = new JSONObject(query.getAnalysis("private-read-graph", "user-1"));
+        assertEquals(new HashSet<String>(java.util.Arrays.asList("secret claim")),
+                nodeTexts(owned.getJSONArray("nodes")));
+        assertEquals("user-1", new JSONObject(query.getAnalysisMeta("private-read-graph", "user-1")).getString("userID"));
+        assertTrue(query.getHistoryOfAnalysis("private-read-graph", "user-1").contains("secret claim"));
+
+        assertTrue(query.insertGraph("shared-read-graph", "user-1", Timestamp.valueOf("2017-11-15 14:28:40"),
+                "Shared", "anyone signed in", true, null));
+        insertClaim(query, "shared-read-node", "shared-read-graph", "shared claim");
+        assertTrue(query.saveLatestAnalysis("shared-read-graph", "user-1", "snapshot").contains("\"status\":true"));
+
+        JSONObject shared = new JSONObject(query.getAnalysis("shared-read-graph", "user-2"));
+        assertEquals(new HashSet<String>(java.util.Arrays.asList("shared claim")),
+                nodeTexts(shared.getJSONArray("nodes")));
+        assertNotNull(query.getAnalysisMeta("shared-read-graph", "user-2"));
+        assertTrue(query.getHistoryOfAnalysis("shared-read-graph", "user-2").contains("shared claim"));
     }
 
     @Test

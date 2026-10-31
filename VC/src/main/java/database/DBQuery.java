@@ -215,6 +215,36 @@ public class DBQuery {
         return rs.get(0).get("userid").toString();
     }
 
+    /**
+     * The owner may read. A graph with {@code isshared} set may be read by any authenticated caller.
+     */
+    public boolean callerMayRead(String graphID, String userId) {
+        if (userId == null || userId.trim().isEmpty()) {
+            return false;
+        }
+        String owner = getGraphOwner(graphID);
+        if (owner != null && owner.trim().equals(userId.trim())) {
+            return true;
+        }
+        return isGraphShared(graphID);
+    }
+
+    private boolean isGraphShared(String graphID) {
+        if (graphID == null) {
+            return false;
+        }
+        ArrayList<HashMap<String,Object>> rs = dbcn.executeQuery(
+                "SELECT ISSHARED FROM CISPACES_GRAPH WHERE GRAPHID = ?", graphID);
+        if (rs.isEmpty() || rs.get(0).get("isshared") == null) {
+            return false;
+        }
+        Object flag = rs.get(0).get("isshared");
+        if (flag instanceof Boolean) {
+            return ((Boolean) flag).booleanValue();
+        }
+        return Boolean.parseBoolean(flag.toString().trim());
+    }
+
     public String graphIdOfNode(String nodeID) {
         return lookupGraphId("SELECT GRAPHID FROM CISPACES_NODE WHERE NODEID = ?", nodeID);
     }
@@ -322,6 +352,17 @@ public class DBQuery {
             return null; //Not found
         }
     }//getAnalysis
+
+    /**
+     * Metadata for a caller who owns the graph or is reading a shared graph.
+     * @return null when the graph is missing or the caller may not read it
+     */
+    public String getAnalysisMeta(String graphID, String caller) {
+        if (!callerMayRead(graphID, caller)) {
+            return null;
+        }
+        return getAnalysisMeta(graphID);
+    }
     
     /**
      * Return an analysis as JSON, based on a graph id.
@@ -358,7 +399,18 @@ public class DBQuery {
         else {
             return null; //Not found
         }
-    }//getAnalysis      
+    }//getAnalysis
+
+    /**
+     * Full analysis for a caller who owns the graph or is reading a shared graph.
+     * @return null when the graph is missing or the caller may not read it
+     */
+    public String getAnalysis(String graphID, String caller) {
+        if (!callerMayRead(graphID, caller)) {
+            return null;
+        }
+        return getAnalysis(graphID);
+    }
    
     //DEPRECATED REMOVE SOON
 //    /* Retrieves the latest analysis associated with a user upon loading the index page.
@@ -538,6 +590,17 @@ public class DBQuery {
         }
 
         return jsonHistory.toString();
+    }
+
+    /**
+     * History for a caller who owns the graph or is reading a shared graph.
+     * @return null when the graph is missing or the caller may not read it
+     */
+    public String getHistoryOfAnalysis(String graphID, String caller) {
+        if (!callerMayRead(graphID, caller)) {
+            return null;
+        }
+        return getHistoryOfAnalysis(graphID);
     }
 
     /**

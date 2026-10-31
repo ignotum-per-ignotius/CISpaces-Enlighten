@@ -79,11 +79,11 @@ public class VCServlet {
     @Path("/history")
     @JWTTokenNeeded
     @Produces(MediaType.APPLICATION_JSON)
-    public String getHistory(@CookieParam("graph_id") String graphID){
+    public Response getHistory(@CookieParam("graph_id") String graphID){
         log.log(Level.INFO, "*** VERSION CONTROL SERVICE - GET HISTORY REQUEST ***");
-        DBQuery dbQuery  = new DBQuery();
-        String response = dbQuery.getHistoryOfAnalysis(graphID);
-        return response;
+        String caller = authenticatedUserId();
+        String response = new DBQuery().getHistoryOfAnalysis(graphID, caller);
+        return readAnalysisForCaller(graphID, response);
     }
 
     
@@ -165,12 +165,10 @@ public class VCServlet {
         log.log(Level.INFO, "*** VERSION CONTROL SERVICE - GET ANALYSIS METADATA REQUEST");
         if(graphID != null) {
             log.log(Level.INFO, "** GRAPH_ID="+graphID);
-            DBQuery dbquery = new DBQuery();
-            String analysis = dbquery.getAnalysisMeta(graphID);
-            if(analysis != null)  return Response.ok().entity(analysis).build();
-            else return Response.status(Response.Status.NOT_FOUND).build();
         }
-        else return Response.status(Response.Status.NOT_FOUND).build();
+        String caller = authenticatedUserId();
+        String analysis = new DBQuery().getAnalysisMeta(graphID, caller);
+        return readAnalysisForCaller(graphID, analysis);
     }//getAnalysisMeta
     
     
@@ -200,12 +198,10 @@ public class VCServlet {
         log.log(Level.INFO, "*** VERSION CONTROL SERVICE - GET ANALYSIS REQUEST");
         if(graphID != null) {
             log.log(Level.INFO, "** GRAPH_ID="+graphID);
-            DBQuery dbquery = new DBQuery();
-            String analysis = dbquery.getAnalysis(graphID);
-            if(analysis != null)  return Response.ok().entity(analysis).build();
-            else return Response.status(Response.Status.NOT_FOUND).build();
         }
-        else return Response.status(Response.Status.NOT_FOUND).build();
+        String caller = authenticatedUserId();
+        String analysis = new DBQuery().getAnalysis(graphID, caller);
+        return readAnalysisForCaller(graphID, analysis);
     }//getAnalysis    
     
     @DELETE
@@ -564,6 +560,28 @@ public class VCServlet {
         if (userId == null || !caller.equals(userId.trim())) {
             throw new WebApplicationException(Response.Status.FORBIDDEN);
         }
+    }
+
+    /**
+     * Owner reads succeed. A shared graph is readable by any authenticated caller.
+     * Missing graphs are 404. Someone else's unshared graph is 403.
+     */
+    private Response readAnalysisForCaller(String graphID, String body) {
+        String caller = authenticatedUserId();
+        if (caller == null || caller.isEmpty()) {
+            throw new WebApplicationException(Response.Status.UNAUTHORIZED);
+        }
+        if (graphID == null) {
+            return Response.status(Response.Status.NOT_FOUND).build();
+        }
+        if (body != null) {
+            return Response.ok().entity(body).build();
+        }
+        String owner = new DBQuery().getGraphOwner(graphID);
+        if (owner == null || owner.trim().isEmpty()) {
+            return Response.status(Response.Status.NOT_FOUND).build();
+        }
+        return Response.status(Response.Status.FORBIDDEN).build();
     }
 
     private void requireGraphOwner(String graphId) {
