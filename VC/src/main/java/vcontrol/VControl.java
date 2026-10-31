@@ -27,14 +27,14 @@ import org.json.simple.JSONObject;
 public class VControl {
 
     /**
-     * The workbench sends {@code islocked}. The parsed value is what gets stored.
+     * The workbench key is {@code islocked}. Null means the payload omitted it,
+     * so an update leaves the stored lock unchanged. A present value is stored.
      */
-    private static boolean lockedFlag(HashMap map) {
-        Object flag = map.get("islocked");
-        if (flag == null) {
-            return false;
+    private static Boolean lockedFlag(HashMap map) {
+        if (map == null || !map.containsKey("islocked") || map.get("islocked") == null) {
+            return null;
         }
-        return Boolean.parseBoolean(flag.toString());
+        return Boolean.valueOf(Boolean.parseBoolean(map.get("islocked").toString()));
     }
 
     /**
@@ -55,7 +55,8 @@ public class VControl {
             graphID = map.get("graphID").toString();
         }
 
-        boolean isLocked = lockedFlag(map);
+        Boolean lockFlag = lockedFlag(map);
+        boolean isLocked = lockFlag != null && lockFlag.booleanValue();
 
         DBQuery dbQuery = new DBQuery();
         dbQuery.insertEdge(toID, fromID, formEdgeID, edgeID, graphID, isLocked);
@@ -127,7 +128,7 @@ public class VControl {
             graphID = map.get("graphID").toString();
         }
 
-        boolean isLocked = lockedFlag(map);
+        Boolean isLocked = lockedFlag(map);
 
         DBQuery dbQuery = new DBQuery();
         dbQuery.insertNode(nodeID, source, uncert, eval, txt, input, timestamp, commit, type, annot, graphID, isLocked);

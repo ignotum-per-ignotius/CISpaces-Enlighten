@@ -373,7 +373,8 @@ app.WorkBoxView = Backbone.View
         type: data['type'],
         nodeID: data['nodeID'],
         annot: data['annot'],
-        graphID: data['graphID']
+        graphID: data['graphID'],
+        islocked: data['islocked']
       };
 
       // creates model of the node in the collection and sends POST request to a back-end service

@@ -86,6 +86,21 @@ public class LockFlagTest {
     }
 
     @Test
+    public void updateWithoutFlagLeavesLockAndExplicitFalseClearsIt() {
+        VCForkControl control = new VCForkControl();
+        control.evalJSONNode(nodeJson("node-keep", "true"));
+        assertTrue(storedLock("CISPACES_NODE", "nodeid", "node-keep"));
+
+        control.evalJSONNode(nodeJsonWithoutLock("node-keep", "edited claim"));
+        assertEquals("edited claim", storedText("node-keep"));
+        assertTrue(storedLock("CISPACES_NODE", "nodeid", "node-keep"));
+
+        String unlock = nodeJson("node-keep", "false").replace("\"islocked\":\"false\"", "\"islocked\":false");
+        control.evalJSONNode(unlock);
+        assertFalse(storedLock("CISPACES_NODE", "nodeid", "node-keep"));
+    }
+
+    @Test
     public void camelCaseKeyIsIgnored() {
         VCForkControl control = new VCForkControl();
         String json = nodeJson("node-camel", "false").replace(
@@ -110,6 +125,21 @@ public class LockFlagTest {
                 + "}";
     }
 
+    private static String nodeJsonWithoutLock(String nodeId, String text) {
+        return "{"
+                + "\"nodeID\":\"" + nodeId + "\","
+                + "\"source\":\"analyst\","
+                + "\"uncert\":\"Confirmed\","
+                + "\"eval\":\"N/A\","
+                + "\"text\":\"" + text + "\","
+                + "\"input\":\"manual\","
+                + "\"dtg\":\"2017-08-25 06:44:34\","
+                + "\"commit\":\"N/A\","
+                + "\"type\":\"I\","
+                + "\"graphID\":\"graph-1\""
+                + "}";
+    }
+
     private static String edgeJson(String edgeId, String locked) {
         return "{"
                 + "\"target\":\"n-to\","
@@ -119,6 +149,14 @@ public class LockFlagTest {
                 + "\"graphID\":\"graph-1\","
                 + "\"islocked\":\"" + locked + "\""
                 + "}";
+    }
+
+    private static String storedText(String nodeId) {
+        ArrayList<HashMap<String, Object>> rows = new DBConnect().execSQL(
+                "SELECT txt FROM CISPACES_NODE WHERE nodeid = '" + nodeId + "'");
+        assertNotNull(rows);
+        assertEquals(1, rows.size());
+        return String.valueOf(rows.get(0).get("txt"));
     }
 
     private static boolean storedLock(String table, String idColumn, String id) {
