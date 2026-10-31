@@ -74,6 +74,42 @@ public class ExtensionsBulletPoints extends URIs {
 
 	private final String newline = "\n";
 
+	/** Escape analyst text before it is placed inside an HTML list item. */
+	private static String escapeHtml(String value) {
+		if (value == null) {
+			return "";
+		}
+		StringBuilder escaped = new StringBuilder(value.length());
+		for (int i = 0; i < value.length(); i++) {
+			char c = value.charAt(i);
+			switch (c) {
+			case '&':
+				escaped.append("&amp;");
+				break;
+			case '<':
+				escaped.append("&lt;");
+				break;
+			case '>':
+				escaped.append("&gt;");
+				break;
+			case '"':
+				escaped.append("&quot;");
+				break;
+			case '\'':
+				escaped.append("&#x27;");
+				break;
+			case '`':
+				escaped.append("&#x60;");
+				break;
+			default:
+				escaped.append(c);
+			}
+		}
+		return escaped.toString();
+	}
+
+
+
 	private final String sBecause = " <u>because</u> ";
 	private final String sAnd = ", <u>and</u> ";
 
@@ -497,7 +533,7 @@ public class ExtensionsBulletPoints extends URIs {
 					outputted);
 		} else {
 			out.append(
-					"<li>" + conclusion.getPropertyValue(claimText).toString());
+					"<li>" + escapeHtml(conclusion.getPropertyValue(claimText).toString()));
 			outputted.add(conclusion);
 
 			Set<Individual> premises = this.getPremises(conclusion);
@@ -519,7 +555,7 @@ public class ExtensionsBulletPoints extends URIs {
 					out.append("[info received] ");
 				}
 
-				out.append(prem.getPropertyValue(claimText).toString());
+				out.append(escapeHtml(prem.getPropertyValue(claimText).toString()));
 
 				outputted.add(prem);
 				orderedPremises.push(prem);
@@ -705,7 +741,7 @@ public class ExtensionsBulletPoints extends URIs {
 			for (Iterator<Individual> info = infos.iterator(); info
 					.hasNext();) {
 				out.append("<li>"
-						+ info.next().getPropertyValue(claimText).toString()
+						+ escapeHtml(info.next().getPropertyValue(claimText).toString())
 						+ "</li>" + newline);
 			}
 			out.append("</ul>" + newline);

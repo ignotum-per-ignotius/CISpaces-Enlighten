@@ -264,7 +264,6 @@ public class VCServlet {
     @Produces(MediaType.TEXT_PLAIN)
     public Response checkUser(String userData){
         log.log(Level.INFO, "*** VERSION CONTROL SERVICE - Login Request ***");
-        log.log(Level.INFO, "Login payload " + userData);
         VCForkControl vcForkControl = new VCForkControl();
         String userInfo = vcForkControl.evalJSONLoginUser(userData);
         if(userInfo != null) {
@@ -302,7 +301,7 @@ public class VCServlet {
             .setExpiration(toDate(LocalDateTime.now().plusHours(48)))
             .signWith(SignatureAlgorithm.HS512, key)
             .compact();
-    log.info("#### generating token for a key : " + jwtToken + " - " + key);
+    log.info("#### issued token");
     return jwtToken;
 
     }
@@ -321,7 +320,6 @@ public class VCServlet {
     @Path("/user/add")
     public Response addUser(String userData){
         log.log(Level.INFO, "*** VERSION CONTROL SERVICE - Add user Request ***");
-        log.log(Level.INFO, "Payload " + userData);
         VCForkControl vcForkControl = new VCForkControl();
         String userInfo = null;
         try {

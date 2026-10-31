@@ -27,6 +27,17 @@ import org.json.simple.JSONObject;
 public class VControl {
 
     /**
+     * The workbench sends {@code islocked}. The parsed value is what gets stored.
+     */
+    private static boolean lockedFlag(HashMap map) {
+        Object flag = map.get("islocked");
+        if (flag == null) {
+            return false;
+        }
+        return Boolean.parseBoolean(flag.toString());
+    }
+
+    /**
      * @param map the hashmap which contains the keys from the JSON of an edge and their respective values
      * @return a hashmap with key: 'response' and value: 'success' if the data has been put into the db or 'fail' if some error occurred
      */
@@ -44,10 +55,7 @@ public class VControl {
             graphID = map.get("graphID").toString();
         }
 
-        boolean isLocked = false;
-        if(map.get("isLocked") != null){
-            Boolean.parseBoolean(map.get("isLocked").toString());
-        }
+        boolean isLocked = lockedFlag(map);
 
         DBQuery dbQuery = new DBQuery();
         dbQuery.insertEdge(toID, fromID, formEdgeID, edgeID, graphID, isLocked);
@@ -119,10 +127,7 @@ public class VControl {
             graphID = map.get("graphID").toString();
         }
 
-        boolean isLocked = false;
-        if(map.get("isLocked") != null){
-            Boolean.parseBoolean(map.get("isLocked").toString());
-        }
+        boolean isLocked = lockedFlag(map);
 
         DBQuery dbQuery = new DBQuery();
         dbQuery.insertNode(nodeID, source, uncert, eval, txt, input, timestamp, commit, type, annot, graphID, isLocked);

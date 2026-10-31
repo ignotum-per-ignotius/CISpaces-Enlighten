@@ -80,7 +80,7 @@ app.WorkBoxView = Backbone.View
         formatter: function(value) {
           if (chart.nodes) {
             chart.nodes.forEach(function(d) {
-              $("#draw_" + d.nodeID + ' text').html(parseText(d.text, value));
+              $("#draw_" + d.nodeID + ' text').text(parseText(d.text, value));
             });
           }
           return value;

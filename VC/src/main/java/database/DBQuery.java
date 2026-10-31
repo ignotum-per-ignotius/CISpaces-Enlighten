@@ -118,9 +118,9 @@ public class DBQuery {
         }else{
             System.out.println("NODE EXISTS");
             dbcn.executeUpdate(
-                    "UPDATE CISPACES_NODE SET uncert = ?, eval = ?, txt = ?, inp = ?, cmt = ?, annot = ? WHERE nodeid = ?",
+                    "UPDATE CISPACES_NODE SET uncert = ?, eval = ?, txt = ?, inp = ?, cmt = ?, annot = ?, islocked = ? WHERE nodeid = ?",
                     sqlString(uncert), sqlString(eval), sqlString(txt), sqlString(input), sqlString(commit),
-                    sqlString(annot), sqlString(nodeID));
+                    sqlString(annot), Boolean.valueOf(isLocked), sqlString(nodeID));
         }
     }
 
