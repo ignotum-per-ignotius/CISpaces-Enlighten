@@ -27,6 +27,7 @@ import javax.ws.rs.core.Response;
 import javax.ws.rs.core.UriInfo;
 import org.json.JSONObject;
 import java.security.Key;
+import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Date;
@@ -82,8 +83,12 @@ public class VCServlet {
     public Response getHistory(@CookieParam("graph_id") String graphID){
         log.log(Level.INFO, "*** VERSION CONTROL SERVICE - GET HISTORY REQUEST ***");
         String caller = authenticatedUserId();
-        String response = new DBQuery().getHistoryOfAnalysis(graphID, caller);
-        return readAnalysisForCaller(graphID, response);
+        try {
+            String response = new DBQuery().getHistoryOfAnalysis(graphID, caller);
+            return readAnalysisForCaller(graphID, response);
+        } catch (SQLException e) {
+            throw databaseError(e);
+        }
     }
 
     
@@ -133,10 +138,14 @@ public class VCServlet {
             requireCaller(userID);
             log.log(Level.INFO, "** USER_ID="+userID);
             DBQuery dbquery = new DBQuery();
-            String analyses = dbquery.getAnalysesMetaByUser(userID);
-            return Response.ok()
-                .entity(analyses)
-                .build();            
+            try {
+                String analyses = dbquery.getAnalysesMetaByUser(userID);
+                return Response.ok()
+                    .entity(analyses)
+                    .build();
+            } catch (SQLException e) {
+                throw databaseError(e);
+            }            
         }
         else return Response.status(Response.Status.NOT_FOUND).build();
         // ToDo - There's scope here for checking the user exists before looking for analyses -
@@ -167,8 +176,12 @@ public class VCServlet {
             log.log(Level.INFO, "** GRAPH_ID="+graphID);
         }
         String caller = authenticatedUserId();
-        String analysis = new DBQuery().getAnalysisMeta(graphID, caller);
-        return readAnalysisForCaller(graphID, analysis);
+        try {
+            String analysis = new DBQuery().getAnalysisMeta(graphID, caller);
+            return readAnalysisForCaller(graphID, analysis);
+        } catch (SQLException e) {
+            throw databaseError(e);
+        }
     }//getAnalysisMeta
     
     
@@ -200,8 +213,12 @@ public class VCServlet {
             log.log(Level.INFO, "** GRAPH_ID="+graphID);
         }
         String caller = authenticatedUserId();
-        String analysis = new DBQuery().getAnalysis(graphID, caller);
-        return readAnalysisForCaller(graphID, analysis);
+        try {
+            String analysis = new DBQuery().getAnalysis(graphID, caller);
+            return readAnalysisForCaller(graphID, analysis);
+        } catch (SQLException e) {
+            throw databaseError(e);
+        }
     }//getAnalysis    
     
     @DELETE
@@ -265,7 +282,12 @@ public class VCServlet {
     public Response checkUser(String userData){
         log.log(Level.INFO, "*** VERSION CONTROL SERVICE - Login Request ***");
         VCForkControl vcForkControl = new VCForkControl();
-        String userInfo = vcForkControl.evalJSONLoginUser(userData);
+        String userInfo;
+        try {
+            userInfo = vcForkControl.evalJSONLoginUser(userData);
+        } catch (SQLException e) {
+            throw databaseError(e);
+        }
         if(userInfo != null) {
             
             // Subject is the user id so later requests can be checked against the graph owner.
@@ -327,7 +349,10 @@ public class VCServlet {
         }
         catch(IllegalArgumentException e) {
             //Username already exists
-            return Response.status(Response.Status.CONFLICT).build();        
+            return Response.status(Response.Status.CONFLICT).build();
+        }
+        catch(SQLException e) {
+            throw databaseError(e);
         }
         if(userInfo != null)
             return Response.status(Response.Status.CREATED).entity(userInfo).build();
@@ -377,7 +402,12 @@ public class VCServlet {
         requireGraphOwner(stringField(graphInfo, "graphID"));
 
         VCForkControl vcForkControl = new VCForkControl();
-        String result = vcForkControl.evalJSONSaveAnalysis(graphInfo);
+        String result;
+        try {
+            result = vcForkControl.evalJSONSaveAnalysis(graphInfo);
+        } catch (SQLException e) {
+            throw databaseError(e);
+        }
 
         log.log(Level.INFO,"*** VERSION CONTROL SERVICE - Save Graph Request Handled ***");
 
@@ -403,7 +433,12 @@ public class VCServlet {
         requireEdgeMutation(edge);
 
         VCForkControl vcControl = new VCForkControl();
-        String out = vcControl.evalJSONEdge(edge);
+        String out;
+        try {
+            out = vcControl.evalJSONEdge(edge);
+        } catch (SQLException e) {
+            throw databaseError(e);
+        }
 
         log.log(Level.INFO,"*** VERSION CONTROL SERVICE - Edge Request Handled ***");
 
@@ -426,7 +461,12 @@ public class VCServlet {
         requireNodeMutation(json);
 
         VCForkControl vcControl = new VCForkControl();
-        String out = vcControl.evalJSONNode(json);
+        String out;
+        try {
+            out = vcControl.evalJSONNode(json);
+        } catch (SQLException e) {
+            throw databaseError(e);
+        }
 
         log.log(Level.INFO,"*** VERSION CONTROL SERVICE - Node Request Handled ***");
 
@@ -447,8 +487,11 @@ public class VCServlet {
         log.log(Level.INFO, "*** VERSION CONTROL SERVICE - Put Edge Request ***");
         requireEdgeMutation(json);
         VCForkControl vcControl = new VCForkControl();
-        String out = vcControl.evalJSONEdge(json);
-        return out;
+        try {
+            return vcControl.evalJSONEdge(json);
+        } catch (SQLException e) {
+            throw databaseError(e);
+        }
     }
 
     /**
@@ -465,8 +508,11 @@ public class VCServlet {
         log.log(Level.INFO, "*** VERSION CONTROL SERVICE - Put Node Request ***");
         requireNodeMutation(json);
         VCForkControl vcControl = new VCForkControl();
-        String out = vcControl.evalJSONNode(json);
-        return out;
+        try {
+            return vcControl.evalJSONNode(json);
+        } catch (SQLException e) {
+            throw databaseError(e);
+        }
     }
 
 
@@ -633,6 +679,11 @@ public class VCServlet {
         } catch (RuntimeException ex) {
             return null;
         }
+    }
+
+    private WebApplicationException databaseError(SQLException e) {
+        log.log(Level.SEVERE, "Database query failed", e);
+        return new WebApplicationException(Response.status(Response.Status.INTERNAL_SERVER_ERROR).build());
     }
 
 }

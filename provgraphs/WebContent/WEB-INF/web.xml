@@ -9,6 +9,15 @@
     <welcome-file>default.htm</welcome-file>
     <welcome-file>default.jsp</welcome-file>
   </welcome-file-list>
+  <filter>
+    <filter-name>JWTTokenNeededFilter</filter-name>
+    <filter-class>filters.JWTTokenNeededFilter</filter-class>
+  </filter>
+  <filter-mapping>
+    <filter-name>JWTTokenNeededFilter</filter-name>
+    <url-pattern>/Prov</url-pattern>
+    <url-pattern>/PlotProvServlet</url-pattern>
+  </filter-mapping>
   <servlet>
     <description></description>
     <servlet-name>Plotting prov servlet</servlet-name>

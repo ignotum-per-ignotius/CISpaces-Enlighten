@@ -83,20 +83,24 @@ public class DBConnect {
 		}
 	 
 
-		public synchronized ArrayList<HashMap<String,Object>> execSQL(String sql){
-			ArrayList<HashMap<String,Object>> result = null;
+		public synchronized ArrayList<HashMap<String,Object>> execSQL(String sql) throws SQLException {
 			ResultSet rs = null;
 			Statement s = null;
 			try{
-				connect();
+				if (!connect() || dbCon == null) {
+					throw new SQLException("FAIL DB CONNECTION");
+				}
 				s= dbCon.createStatement();
 				rs= s.executeQuery(sql);
 		 
-			result=convertResultSetToList(rs);
+			return convertResultSetToList(rs);
 			
+			}catch(SQLException e){
+				log.log(Level.SEVERE,"FAIL DB CONNECTION",e);
+				throw e;
 			}catch(Exception e){
 				log.log(Level.SEVERE,"FAIL DB CONNECTION",e);
-				
+				throw new SQLException("FAIL DB CONNECTION", e);
 			}finally{
 			    if (rs != null) {
 			        try {
@@ -114,7 +118,6 @@ public class DBConnect {
 			        } catch (SQLException e) { /* ignored */}
 			    }
 			}
-			return result;
 		}
 		
 		public synchronized boolean updateSQL(String sql){
