@@ -12,6 +12,10 @@
       <param-name>print</param-name>
       <param-value>false</param-value>
     </init-param>
+    <init-param>
+      <param-name>jersey.config.server.provider.classnames</param-name>
+      <param-value>filters.JWTTokenNeededFilter</param-value>
+    </init-param>
     <load-on-startup>1</load-on-startup>
   </servlet>
   <servlet-mapping>

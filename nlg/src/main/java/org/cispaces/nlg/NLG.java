@@ -32,6 +32,8 @@ import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
+
+import filters.JWTTokenNeeded;
 import javax.ws.rs.client.Client;
 import javax.ws.rs.client.ClientBuilder;
 import javax.ws.rs.client.Entity;
@@ -57,6 +59,7 @@ public class NLG {
 	public static Logger log = null;
 	
 	@POST
+	@JWTTokenNeeded
 	@Produces(MediaType.TEXT_PLAIN)
 	@Consumes(MediaType.WILDCARD)
 	public String EE(String input) throws UnsupportedEncodingException{

@@ -25,6 +25,8 @@ import com.google.gson.internal.LinkedTreeMap;
 import utils.JsonHelper;
 
 import javax.servlet.ServletConfig;
+import filters.JWTTokenNeeded;
+
 import javax.ws.rs.*;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
@@ -63,6 +65,7 @@ public class ERSServlet {
 
 
   @POST
+  @JWTTokenNeeded
   @Produces(MediaType.APPLICATION_JSON)
   @Consumes(MediaType.APPLICATION_JSON)
   public String sayJSONtextEvaluate(String input) {

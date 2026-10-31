@@ -29,6 +29,8 @@ import javax.ws.rs.Consumes;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 
+import filters.JWTTokenNeeded;
+
 
 import utils.JsonHelper;
 
@@ -71,6 +73,7 @@ public class ProvSimpServlet {
   @Context
    ServletConfig context;
   @POST
+  @JWTTokenNeeded
   @Produces(MediaType.APPLICATION_JSON)
   @Consumes(MediaType.APPLICATION_JSON)
   public String sayJSONtextEvaluate(String input) {

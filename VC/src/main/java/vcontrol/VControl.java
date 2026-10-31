@@ -136,7 +136,7 @@ public class VControl {
     /**
      * @param map the hashmap which contains the keys from the JSON of a graph
      */
-    public void onAddGraph(HashMap map) {
+    public boolean onAddGraph(HashMap map) {
         TimeHelper timeHelper = new TimeHelper();
         String graphID = map.get("graphID").toString();
         String userID = map.get("userID").toString();
@@ -153,7 +153,7 @@ public class VControl {
         }
 
         DBQuery dbQuery = new DBQuery();
-        dbQuery.insertGraph(graphID, userID, timestamp, title, description, isShared, parentGraphID);
+        return dbQuery.insertGraph(graphID, userID, timestamp, title, description, isShared, parentGraphID);
     }
 
     /**
