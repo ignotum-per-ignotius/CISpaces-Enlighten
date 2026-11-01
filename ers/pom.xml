@@ -39,50 +39,6 @@
                     <webXml>WebContent/WEB-INF/web.xml</webXml>
                 </configuration>
             </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-install-plugin</artifactId>
-                <version>2.5.2</version>
-                <executions>
-                    <execution>
-                        <id>prol</id>
-                        <phase>initialize</phase>
-                        <configuration>
-                            <file>lib/jprol.jar</file>
-                            <repositoryLayout>default</repositoryLayout>
-                            <groupId>com.igormaznitsa</groupId>
-                            <artifactId>prol</artifactId>
-                            <version>1.0</version>
-                            <packaging>jar</packaging>
-                            <generatePom>true</generatePom>
-                        </configuration>
-                        <goals>
-                            <goal>install-file</goal>
-                        </goals>
-                    </execution>
-                    <execution>
-                        <id>jargsemsat</id>
-                        <phase>initialize</phase>
-                        <configuration>
-                            <file>lib/jArgSemSAT-0.1.2-1.jar</file>
-                            <repositoryLayout>default</repositoryLayout>
-                            <groupId>net.sf.jargsemsat</groupId>
-                            <artifactId>jArgSemSAT</artifactId>
-                            <version>0.1.2</version>
-                            <packaging>jar</packaging>
-                            <generatePom>true</generatePom>
-                        </configuration>
-                        <goals>
-                            <goal>install-file</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-            	<groupId>org.apache.maven.plugins</groupId>
-            	<artifactId>maven-install-plugin</artifactId>
-            	<version>2.5.2</version>
-            </plugin>
         </plugins>
     </build>
 
@@ -142,6 +98,7 @@
             <artifactId>gson</artifactId>
             <version>2.8.1</version>
         </dependency>
+        <!-- Bundled argumentation libraries. Resolved from third-party/maven, not Maven Central. -->
         <dependency>
             <groupId>com.igormaznitsa</groupId>
             <artifactId>prol</artifactId>
@@ -163,6 +120,20 @@
             <version>0.1.2</version>
         </dependency>
     </dependencies>
+    <repositories>
+        <repository>
+            <id>cispaces-bundled</id>
+            <name>Checked-in libraries</name>
+            <url>file://${project.basedir}/../third-party/maven</url>
+            <releases>
+                <enabled>true</enabled>
+                <checksumPolicy>ignore</checksumPolicy>
+            </releases>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
+    </repositories>
     <properties>
         <jersey.version>2.26</jersey.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
