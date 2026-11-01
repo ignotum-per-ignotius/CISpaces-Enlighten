@@ -114,12 +114,27 @@
             <artifactId>log4j</artifactId>
             <version>1.2.17</version>
         </dependency>
+        <!-- Checked-in Prov API (Jena 2). Resolved from third-party/maven, not Maven Central. -->
         <dependency>
             <groupId>com.prov</groupId>
             <artifactId>prov</artifactId>
             <version>1.0</version>
         </dependency>
     </dependencies>
+    <repositories>
+        <repository>
+            <id>cispaces-bundled</id>
+            <name>Checked-in libraries</name>
+            <url>file://${project.basedir}/../third-party/maven</url>
+            <releases>
+                <enabled>true</enabled>
+                <checksumPolicy>ignore</checksumPolicy>
+            </releases>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
+    </repositories>
     <properties>
         <jersey.version>2.26</jersey.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

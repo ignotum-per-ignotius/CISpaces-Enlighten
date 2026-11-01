@@ -31,29 +31,6 @@
                     <webXml>WebContent/WEB-INF/web.xml</webXml>
                 </configuration>
             </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-install-plugin</artifactId>
-                <version>2.5.2</version>
-                <executions>
-                    <execution>
-                        <id>prov-irp-jena</id>
-                        <phase>initialize</phase>
-                        <configuration>
-                            <file>lib/prov-irp_jena3.3.jar</file>
-                            <repositoryLayout>default</repositoryLayout>
-                            <groupId>com.prov</groupId>
-                            <artifactId>prov-jena</artifactId>
-                            <version>1.0</version>
-                            <packaging>jar</packaging>
-                            <generatePom>true</generatePom>
-                        </configuration>
-                        <goals>
-                            <goal>install-file</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
         </plugins>
     </build>
 
@@ -125,13 +102,28 @@
             <artifactId>jgrapht-core</artifactId>
             <version>1.0.1</version>
         </dependency>
-        <!-- Bundled library - this is different from the prov library used by the other services -->
+        <!-- Bundled library - this is different from the prov library used by the other services.
+             Resolved from third-party/maven, not Maven Central. -->
         <dependency>
             <groupId>com.prov</groupId>
             <artifactId>prov-jena</artifactId>
             <version>1.0</version>
         </dependency>
     </dependencies>
+    <repositories>
+        <repository>
+            <id>cispaces-bundled</id>
+            <name>Checked-in libraries</name>
+            <url>file://${project.basedir}/../third-party/maven</url>
+            <releases>
+                <enabled>true</enabled>
+                <checksumPolicy>ignore</checksumPolicy>
+            </releases>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
+    </repositories>
     <properties>
         <jersey.version>2.26</jersey.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
