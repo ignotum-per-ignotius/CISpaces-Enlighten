@@ -526,4 +526,73 @@ public class PostgreSQLDB {
             finalise(null, statement, conn);
         }
     }
+
+    /**
+     * Facts grouped by a place and a time taken from the sentence.
+     *
+     * @return situation rows, or null when the query fails
+     */
+    public List<Situation> listSituations() {
+        Statement statement = null;
+        ResultSet resultSet = null;
+        List<Situation> rows = new ArrayList<>();
+
+        try {
+            if (!connect()) { return null; }
+
+            statement = conn.createStatement();
+            resultSet = statement.executeQuery(
+                    "SELECT situation.place, situation.time_label, extract.extract, situation.source_uri " +
+                    "FROM factextract.phase1_situation AS situation " +
+                    "JOIN factextract.phase1_ext_db_item AS extract " +
+                    "ON situation.extract_uri = extract.extract_uri " +
+                    "ORDER BY situation.situation_key"
+            );
+            while (resultSet.next()) {
+                rows.add(new Situation(
+                        resultSet.getString("place"),
+                        resultSet.getString("time_label"),
+                        resultSet.getString("extract"),
+                        resultSet.getString("source_uri")
+                ));
+            }
+        } catch (SQLException exc) {
+            log.log(Level.SEVERE, "Failed PostgreSQL DB query", exc);
+            exc.printStackTrace();
+            return null;
+        } finally {
+            finalise(resultSet, statement, conn);
+        }
+        return rows;
+    }
+
+    /**
+     * The scenario graph JSON written for facts this extractor stored.
+     *
+     * @return graph JSON, or null when none is stored or the query fails
+     */
+    public String scenarioGraph() {
+        Statement statement = null;
+        ResultSet resultSet = null;
+
+        try {
+            if (!connect()) { return null; }
+
+            statement = conn.createStatement();
+            resultSet = statement.executeQuery(
+                    "SELECT graph FROM factextract.phase1_scenario " +
+                    "WHERE scenario_key = 'fact-extract-scenario'"
+            );
+            if (!resultSet.next()) {
+                return null;
+            }
+            return resultSet.getString("graph");
+        } catch (SQLException exc) {
+            log.log(Level.SEVERE, "Failed PostgreSQL DB query", exc);
+            exc.printStackTrace();
+            return null;
+        } finally {
+            finalise(resultSet, statement, conn);
+        }
+    }
 }

@@ -89,7 +89,9 @@ $ <CTRL+A>,<D>
 
 ```$ ./stop-cispaces.sh```
 
-The root Dockerfile builds this same workbench on Java 8 with Tomcat 8.0.48, Derby 10.12.1.1, and the same wars; start the container with `CISPACES_DERBY_PASSWORD` set so the entrypoint can write Tomcat `context.xml` at runtime. From the repository root, `docker compose up` starts that workbench together with PostgreSQL, RabbitMQ, and the fact-extraction consumer; export `CISPACES_DERBY_PASSWORD`, `CISPACES_POSTGRES_PASSWORD`, and `CISPACES_RABBITMQ_PASSWORD` first.
+The root Dockerfile builds this same workbench on Java 8 with Tomcat 8.0.48, Derby 10.12.1.1, and the same wars; start the container with `CISPACES_DERBY_PASSWORD` set so the entrypoint can write Tomcat `context.xml` at runtime. From the repository root, `docker compose up` starts that workbench together with PostgreSQL, RabbitMQ, and fact extraction; export `CISPACES_DERBY_PASSWORD`, `CISPACES_POSTGRES_PASSWORD`, and `CISPACES_RABBITMQ_PASSWORD` first.
+
+The fact-extraction image reads the fanout exchange `cispaces_exchange`. A vocabulary message (`lexicon` and `phrase_mapping`, the document FEWS publishes) refreshes the phrase list, and that list replaces the previous one only after the database reindex commits. A text message (`{"text":"..."}` or one Twitter status JSON object) is split into sentences and stored as verb-mediated subject, relation, and object rows in the phase-1 tables `GET fewsservlet/topics` and `POST fewsservlet/tweets` already read. Negation and genuine are flags on each fact. A place or time in the sentence is stored for `GET fewsservlet/situations`. The same facts are one scenario graph: `GET fewsservlet/scenario`, and the workbench analysis `fact-extract-scenario` for the seeded user Ella. A `.txt` or `.json` file dropped in the `fact-inbox` volume is published onto the same exchange. The broker auto-acks those deliveries. FEWS does not wait for an ack. This image does not run the 2017 Southampton packages, a Twitter client, or the Stanford parser.
 
 ## Third party software
 Cispaces has dependencies on a number of third party software libraries, none of

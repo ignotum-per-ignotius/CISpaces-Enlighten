@@ -1,6 +1,7 @@
 package fewsservlet;
 
 import database.PostgreSQLDB;
+import database.Situation;
 import database.Topic;
 import database.Tweet;
 import database.VocabularyTopic;
@@ -265,6 +266,42 @@ public class FEWSServlet {
             return Response.status(Response.Status.SERVICE_UNAVAILABLE).build();
         }
 
+    }
+
+    /**
+     * Facts grouped by place and time.
+     *
+     * GET fewsservlet/situations
+     */
+    @JWTTokenNeeded
+    @GET
+    @Path("/situations")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response listSituations() {
+        log.info("#### Getting situations");
+        List<Situation> rows = postgreSQLDB.listSituations();
+        if (rows == null) {
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).build();
+        }
+        return Response.status(Response.Status.OK).entity(rows).build();
+    }
+
+    /**
+     * Scenario graph for extracted facts.
+     *
+     * GET fewsservlet/scenario
+     */
+    @JWTTokenNeeded
+    @GET
+    @Path("/scenario")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response scenario() {
+        log.info("#### Getting scenario");
+        String graph = postgreSQLDB.scenarioGraph();
+        if (graph == null) {
+            return Response.status(Response.Status.NOT_FOUND).build();
+        }
+        return Response.status(Response.Status.OK).entity(graph).type(MediaType.APPLICATION_JSON).build();
     }
 
 }

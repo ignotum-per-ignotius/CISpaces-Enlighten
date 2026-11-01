@@ -135,6 +135,8 @@ Source: `FEWS/src/main/java/fewsservlet/FEWSServlet.java`. Jersey package `fewss
 
 `negated` and `genuine` on a topic are integers. `-1` means unknown.
 
+Fact extraction listens on the RabbitMQ fanout `cispaces_exchange`. Vocabulary changes publish `lexicon` and `phrase_mapping`. A separate JSON text message (`text`, or a Twitter status with `text` and `id_str`) is stored as phase-1 facts those two read endpoints return. A `.txt` or `.json` file in the fact-inbox volume is published as the same kind of text message. `GET fewsservlet/situations` returns facts grouped by place and time. `GET fewsservlet/scenario` returns the scenario graph, which the workbench also stores as analysis `fact-extract-scenario`. Deliveries are auto-acked. FEWS does not wait for an acknowledgement.
+
 - `GET fewsservlet/hello`
 
   Plain-text hello. No JWT.
@@ -146,6 +148,14 @@ Source: `FEWS/src/main/java/fewsservlet/FEWSServlet.java`. Jersey package `fewss
 - `GET fewsservlet/topics`
 
   Requires a JWT. JSON array of topics.
+
+- `GET fewsservlet/situations`
+
+  Requires a JWT. JSON array of extracted facts that mention a place or a time. Each item has `place`, `time`, `extract`, and `uri`. An empty string means that side was not in the sentence.
+
+- `GET fewsservlet/scenario`
+
+  Requires a JWT. JSON scenario graph (`graphID`, `title`, `nodes`, `edges`) for facts this extractor stored, or 404 when none have been stored. The workbench analysis id is `fact-extract-scenario`.
 
 - `GET fewsservlet/vocab`
 
