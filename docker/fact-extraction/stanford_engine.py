@@ -16,8 +16,9 @@ unpublished wheels named in ``CISpaces/factextraction`` ``build.xml``:
 ``get_seed_tuples_from_extractions`` is called by ``fact_extraction_app.py``
 and is not defined on the 1.0.0 library. ``seed_tuples_from_extractions``
 below is a reconstruction of that filter. Each verb is its own fact. A
-window matches ``setSeedTuples``, and extra trailing ``ARGUMENT``s stay on
-that fact. It is not the 0.1.0 function.
+window matches ``setSeedTuples``. Extra trailing ``ARGUMENT``s stay on that
+fact. Extra leading ``ARGUMENT``s are trimmed so a long subject does not
+drop the verb. It is not the 0.1.0 function.
 
 The dependency-parser template learner is not run on the request path. The
 2017 app used it to build open-extraction templates, and
@@ -85,6 +86,24 @@ def _accepted_types(types, set_sequences):
     return False
 
 
+def _trim_leading_arguments(window, set_sequences):
+    """Drop extra leading ARGUMENTs until the seed matches.
+
+    Trailing ARGUMENTs stay, including ones past the longest listed pattern.
+    Leading ARGUMENTs beyond ``setSeedTuples`` are removed from the front so
+    the verb is kept. The arguments nearest the verb are the ones that remain.
+    """
+    start = 0
+    while start < len(window):
+        candidate = window[start:]
+        if _accepted_types(tuple(item[0] for item in candidate), set_sequences):
+            return candidate
+        if window[start][0] != "ARGUMENT":
+            return None
+        start += 1
+    return None
+
+
 def seed_tuples_from_extractions(list_sent_extractions, set_sequences):
     """Keep each verb-mediated fact.
 
@@ -94,7 +113,8 @@ def seed_tuples_from_extractions(list_sent_extractions, set_sequences):
     previous fact by a longer trailing-argument pattern. One argument between
     two verbs stays the object of the first verb. The later verb then reuses
     that subject so its tuple still matches ``setSeedTuples``. Two or more
-    arguments between verbs leave the last one as the next subject.
+    arguments between verbs leave the last one as the next subject. Extra
+    leading ARGUMENTs are trimmed; extra trailing ARGUMENTs stay.
     """
     found = []
     for sent in list_sent_extractions:
@@ -112,12 +132,16 @@ def seed_tuples_from_extractions(list_sent_extractions, set_sequences):
                 subject_items = list(previous_subject)
                 reused = True
             window = tuple(subject_items) + tuple(sent[rel_start:rel_end]) + tuple(object_items)
-            if not _accepted_types(tuple(item[0] for item in window), set_sequences):
+            fitted = _trim_leading_arguments(window, set_sequences)
+            if fitted is None:
                 consumed = rel_end
                 continue
-            found.append(window)
-            if subject_items and not reused:
-                previous_subject = tuple(subject_items)
+            found.append(tuple(fitted))
+            if not reused:
+                rel_at = next(index for index, item in enumerate(fitted) if item[0] == "RELATION")
+                kept_subject = tuple(fitted[:rel_at])
+                if kept_subject:
+                    previous_subject = kept_subject
             if object_items:
                 last_object = sent.index(object_items[-1], rel_end)
                 consumed = last_object + 1

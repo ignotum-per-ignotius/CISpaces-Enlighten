@@ -92,6 +92,31 @@ class AliasTest(unittest.TestCase):
         self.assertEqual(seeds[0][-1], ("ARGUMENT", "queues"))
         self.assertEqual(seeds[0][1], ("RELATION", "reported"))
 
+    def test_long_subject_does_not_drop_the_verb(self):
+        sent = [
+            ("ARGUMENT", "city"),
+            ("ARGUMENT", "block"),
+            ("ARGUMENT", "exchange"),
+            ("ARGUMENT", "NYSE"),
+            ("RELATION", "reported"),
+            ("ARGUMENT", "unrest"),
+            ("ARGUMENT", "panic"),
+            ("ARGUMENT", "rumours"),
+            ("ARGUMENT", "closures"),
+            ("ARGUMENT", "delays"),
+            ("ARGUMENT", "queues"),
+        ]
+        seeds = seed_tuples_from_extractions([sent], patterns.setSeedTuples)
+        self.assertEqual(len(seeds), 1)
+        self.assertNotIn(("ARGUMENT", "city"), seeds[0])
+        self.assertEqual(seeds[0][:4], (
+            ("ARGUMENT", "block"),
+            ("ARGUMENT", "exchange"),
+            ("ARGUMENT", "NYSE"),
+            ("RELATION", "reported"),
+        ))
+        self.assertEqual(seeds[0][-1], ("ARGUMENT", "queues"))
+
 
 @unittest.skipUnless(TAGGER and os.path.isdir(TAGGER), "Stanford tagger directory is not set")
 class StanfordExtractorTest(unittest.TestCase):
