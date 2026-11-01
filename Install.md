@@ -16,8 +16,8 @@ CISpaces does not ship a JWT signing key or database passwords. Placeholders liv
 
 Export these before `./install-prereqs.sh`, `./create-database.sh`, and `FEWS/extra/install-fact-extraction.sh`, and export the PostgreSQL and RabbitMQ values again in the shell that runs `./start-cispaces.sh` so Tomcat inherits them:
 
-- `CISPACES_DERBY_PASSWORD` — Derby user `gaiandb`. `install-prereqs.sh` writes it into Tomcat's `context.xml`. `create-database.sh` uses it for the ij connection.
-- `CISPACES_POSTGRES_PASSWORD` — PostgreSQL role `intelanalysis`. FEWS reads this when it connects. `install-fact-extraction.sh` sets the role password from it and writes `db_pass` in `fact_extraction_app.ini`. The linux package replaces that line with `db_pass=__CISPACES_POSTGRES_PASSWORD__`, and the packaged `start-cispaces.sh` fills it from this variable without printing it.
+- `CISPACES_DERBY_PASSWORD` — Derby user `gaiandb`. `install-prereqs.sh` writes it into Tomcat's `context.xml` and sets that file to mode 600. `create-database.sh` uses it for the ij connection.
+- `CISPACES_POSTGRES_PASSWORD` — PostgreSQL role `intelanalysis`. FEWS reads this when it connects. `install-fact-extraction.sh` sets the role password from it and writes `db_pass` in `fact_extraction_app.ini`. The linux package replaces that line with `db_pass=__CISPACES_POSTGRES_PASSWORD__`, and the packaged `start-cispaces.sh` fills it from this variable, sets the file to mode 600, and does not print it.
 - `CISPACES_RABBITMQ_PASSWORD` — RabbitMQ user `intelanalysis`. FEWS reads this when it connects. `install-fact-extraction.sh` sets the broker user from it.
 
 `install-prereqs.sh` generates one JWT key at `${CISPACES}/config/key.properties` (mode 600) and appends `CISPACES_JWT_KEY_FILE` to `~/.profile`. Every service reads that same file. `start-cispaces.sh` exports `CISPACES_JWT_KEY_FILE` when it is unset, defaulting to `${CISPACES}/config/key.properties`. Replace that file and restart to rotate the key. Do not commit it.

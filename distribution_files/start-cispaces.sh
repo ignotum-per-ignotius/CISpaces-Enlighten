@@ -72,7 +72,7 @@ fi
 apply_fact_extraction_db_pass() {
     set +x
     local root="$1"
-    local ini ini_mode password_file ini_tmp warned
+    local ini password_file ini_tmp warned
     warned=0
     if [ ! -d "$root" ]; then
         return 0
@@ -100,7 +100,6 @@ apply_fact_extraction_db_pass() {
         password_file=$(mktemp)
         chmod 600 "$password_file"
         printf '%s' "$CISPACES_POSTGRES_PASSWORD" > "$password_file"
-        ini_mode=$(stat -c %a "$ini")
         ini_tmp=$(mktemp)
         chmod 600 "$ini_tmp"
         # Build the line in a prefix that is not scanned again, so a value
@@ -122,7 +121,9 @@ apply_fact_extraction_db_pass() {
             }
         ' "$ini" > "$ini_tmp"
         mv "$ini_tmp" "$ini"
-        chmod "$ini_mode" "$ini"
+        # Packaged copies are often mode 644. Do not put that mode back
+        # after the password is written.
+        chmod 600 "$ini"
         rm -f "$password_file"
         unset password_file
     done < <(find "$root" -type f -name fact_extraction_app.ini 2>/dev/null)

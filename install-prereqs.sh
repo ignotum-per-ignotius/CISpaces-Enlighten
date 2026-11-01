@@ -175,6 +175,7 @@ cat << EOF >> ${CISPACES}/tools/tomcat/conf/context.xml
 </Context>
 EOF
 unset derby_password_xml
+chmod 600 "${CISPACES}/tools/tomcat/conf/context.xml"
 echo
 cd -
 
