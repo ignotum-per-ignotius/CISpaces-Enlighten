@@ -143,7 +143,7 @@ rabbitmq_set_password() {
     fi
     # The broker reads the file. The sudo/rabbitmqctl command line does not
     # contain the password, and eval prints ok rather than the password.
-    expr="{ok, PasswordBin} = file:read_file(\"${broker_file}\"), Password = binary_to_list(PasswordBin), code:ensure_loaded(rabbit_auth_backend_internal), case erlang:function_exported(rabbit_auth_backend_internal, ${fun}, 3) of true -> rabbit_auth_backend_internal:${fun}(<<\"${SQL_USER}\">>, Password, <<\"install-fact-extraction\">>); false -> rabbit_auth_backend_internal:${fun}(<<\"${SQL_USER}\">>, Password) end, ok."
+    expr="{ok, PasswordBin} = file:read_file(\"${broker_file}\"), code:ensure_loaded(rabbit_auth_backend_internal), case erlang:function_exported(rabbit_auth_backend_internal, ${fun}, 3) of true -> rabbit_auth_backend_internal:${fun}(<<\"${SQL_USER}\">>, PasswordBin, <<\"install-fact-extraction\">>); false -> rabbit_auth_backend_internal:${fun}(<<\"${SQL_USER}\">>, PasswordBin) end, ok."
     sudo rabbitmqctl eval "$expr"
     status=$?
     sudo rm -f "$broker_file"
