@@ -66,16 +66,18 @@ public class VCForkControl {
     /**
      * @param graph the json for a graph coming from the client
      */
-    public void evalJSONGraph(String graph) {
+    public boolean evalJSONGraph(String graph) {
         log.log(Level.INFO, "*** VERSION CONTROL SERVICE - SPLIT JSON GRAPH");
 
         graph = graph.replaceAll("\"\"", "null");
         HashMap map = jsh.convertInputMap(graph);
 
         VControl vc = new VControl();
-        vc.onAddGraph(map);
-
-        log.log(Level.INFO, "*** VERSION CONTROL SERVICE - NEW GRAPH ADDED SUCCESSFULLY;");
+        boolean inserted = vc.onAddGraph(map);
+        if (inserted) {
+            log.log(Level.INFO, "*** VERSION CONTROL SERVICE - NEW GRAPH ADDED SUCCESSFULLY;");
+        }
+        return inserted;
     }
 
     /**
@@ -116,10 +118,12 @@ public class VCForkControl {
     }
 
 
-    public void evalJSONUpdateAnalysis(String analysis){
+    public boolean evalJSONUpdateAnalysis(String analysis){
         HashMap map = jsh.convertInputMap(analysis);
+        if (map == null || map.isEmpty()) {
+            return false;
+        }
         DBQuery dbQuery = new DBQuery();
-        dbQuery.updateAnalysis(map);
-
+        return dbQuery.updateAnalysis(map);
     }
 }

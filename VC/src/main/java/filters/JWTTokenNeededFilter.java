@@ -1,9 +1,9 @@
 package filters;
 
+import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 
 import javax.annotation.Priority;
-import javax.inject.Inject;
 import javax.ws.rs.NotAuthorizedException;
 import javax.ws.rs.Priorities;
 import javax.ws.rs.container.ContainerRequestContext;
@@ -19,7 +19,10 @@ import java.util.logging.Logger;
 @Provider
 @Priority(Priorities.AUTHENTICATION)
 public class JWTTokenNeededFilter implements ContainerRequestFilter {
-    
+
+    /** Request property holding the authenticated user id (the JWT subject). */
+    public static final String JWT_SUBJECT = "jwt.subject";
+
     private static Logger log;
     
     public JWTTokenNeededFilter() {
@@ -29,13 +32,12 @@ public class JWTTokenNeededFilter implements ContainerRequestFilter {
     @Override
     public void filter(ContainerRequestContext requestContext) throws IOException {
 
-        // Get the HTTP Authorization header from the request
+        // Get the HTTP Authorization header from the request. Do not log the header or the token.
         String authorizationHeader = requestContext.getHeaderString(HttpHeaders.AUTHORIZATION);
-        log.info("#### authorizationHeader : " + authorizationHeader);
 
         // Check if the HTTP Authorization header is present and formatted correctly
         if (authorizationHeader == null || !authorizationHeader.startsWith("Bearer ")) {
-            log.severe("#### invalid authorizationHeader : " + authorizationHeader);
+            log.severe("#### missing or malformed Authorization header");
             throw new NotAuthorizedException("Authorization header must be provided");
         }
 
@@ -46,11 +48,12 @@ public class JWTTokenNeededFilter implements ContainerRequestFilter {
 
             // Validate the token
             Key key = KeyGenerator.generateKey();
-            Jwts.parser().setSigningKey(key).parseClaimsJws(token);
-            log.info("#### valid token : " + token);
+            Claims claims = Jwts.parser().setSigningKey(key).parseClaimsJws(token).getBody();
+            requestContext.setProperty(JWT_SUBJECT, claims.getSubject());
+            log.info("#### valid token");
 
         } catch (Exception e) {
-            log.severe("#### invalid token : " + token);
+            log.severe("#### invalid token");
             requestContext.abortWith(Response.status(Response.Status.UNAUTHORIZED).build());
         }
     }

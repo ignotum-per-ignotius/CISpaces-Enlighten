@@ -16,10 +16,19 @@ import utils.TimeHelper;
 
 import java.sql.Timestamp;
 import java.util.*;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 
 
 public class DBQuery {
+
+    private static final Logger log = Logger.getLogger(DBQuery.class.getName());
+
+    private static final String[] ANALYSIS_TABLES = {
+            "CISPACES_GRAPH", "CISPACES_GRAPH_HISTORY", "CISPACES_EDGE",
+            "CISPACES_EDGE_HISTORY", "CISPACES_NODE", "CISPACES_NODE_HISTORY"
+    };
 
     /*This object manages the connection to the database and the execution of queries
     * @see DBConnect in the database package
@@ -87,145 +96,80 @@ public class DBQuery {
     }
 
     //the query to insert a new graph into the database
-    public void insertGraph(String graphid, String userid, Timestamp timest, String title, String description, boolean isshared, String parentgraphid){
-        String sql;
-        sql = "INSERT INTO CISPACES_GRAPH(graphid, userid, timest, title, description, isshared, parentgraphid) VALUES "
-                + "( '" + graphid + "' ,"
-                + " '" + userid + "' ,"
-                + " '" + timest + "' ,"
-                + " '" + title +  "' ,"
-                + " '" + description +"' ,"
-                + " '" + isshared + "' ,"
-                + " '" + parentgraphid + "'"
-                +" )";
-
-        System.out.println(sql);
-        dbcn.updateSQL(sql);
+    public boolean insertGraph(String graphid, String userid, Timestamp timest, String title, String description, boolean isshared, String parentgraphid){
+        String sql = "INSERT INTO CISPACES_GRAPH(graphid, userid, timest, title, description, isshared, parentgraphid) VALUES (?, ?, ?, ?, ?, ?, ?)";
+        return dbcn.executeUpdate(sql, sqlString(graphid), sqlString(userid), sqlTimestamp(timest),
+                sqlString(title), sqlString(description), Boolean.valueOf(isshared), sqlString(parentgraphid));
     }
 
     //queries to insert a node or update an existing node information in the database
     public void insertNode(String nodeID, String source, String uncert, String eval, String txt, String input,
                            Timestamp timestamp, String commit, String type, String annot, String graphID, boolean isLocked)
     {
-        String sql;
-        sql = "Select * from CISPACES_NODE WHERE nodeid = " + "'" + nodeID + "'";
-        ArrayList<HashMap<String,Object>> rs = dbcn.execSQL(sql);
+        ArrayList<HashMap<String,Object>> rs = dbcn.executeQuery(
+                "SELECT nodeid FROM CISPACES_NODE WHERE nodeid = ?", nodeID);
         if(rs.isEmpty()){
             System.out.println("NODE DOESNT EXIST");
-            sql = "INSERT INTO CISPACES_NODE (nodeid, source, uncert, eval, txt, inp, dtg, cmt, type, annot, graphid, islocked) VALUES "
-                    + "( '"+nodeID+"' ,"
-                    + " '"+source+"' ,"
-                    + " '"+uncert+"' ,"
-                    + " '"+eval+"' ,"
-                    + " '"+txt+"' ,"
-                    + " '"+input+"' ,"
-                    + " '"+timestamp+"' ,"
-                    + " '"+commit+"' ,"
-                    + " '"+type+"' ,"
-                    + " '"+annot+"' ,"
-                    + " '"+graphID+"' ,"
-                    + " '"+isLocked+"'"
-                    + " )";
-            System.out.println(sql);
+            dbcn.executeUpdate(
+                    "INSERT INTO CISPACES_NODE (nodeid, source, uncert, eval, txt, inp, dtg, cmt, type, annot, graphid, islocked) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    sqlString(nodeID), sqlString(source), sqlString(uncert), sqlString(eval), sqlString(txt),
+                    sqlString(input), sqlTimestamp(timestamp), sqlString(commit), sqlString(type), sqlString(annot),
+                    sqlString(graphID), Boolean.valueOf(isLocked));
         }else{
             System.out.println("NODE EXISTS");
-            sql = "UPDATE CISPACES_NODE SET uncert = " + "'" + uncert + "'" + " ,"
-                                        + " eval = " + "'" + eval + "'" + " ,"
-                                        + " txt = "  + "'" + txt + "'" + " ,"
-                                        + " inp = "  + "'" + input + "'" + " ,"
-                                        + " cmt = "  + "'" + commit + "'" + " ,"
-                                        + " annot = " + "'" + annot + "'"
-                    + " WHERE nodeid = " + "'" + nodeID + "'";
-            System.out.println(sql);
+            dbcn.executeUpdate(
+                    "UPDATE CISPACES_NODE SET uncert = ?, eval = ?, txt = ?, inp = ?, cmt = ?, annot = ? WHERE nodeid = ?",
+                    sqlString(uncert), sqlString(eval), sqlString(txt), sqlString(input), sqlString(commit),
+                    sqlString(annot), sqlString(nodeID));
         }
-
-        dbcn.updateSQL(sql);
     }
 
     //insert a node in the history table or update the information if it exists
     public void insertNodeHistory(String nodeID, String source, String uncert, String eval, String txt, String input,
                            Timestamp timestamp, String commit, String type, String annot, String graphID, boolean isLocked, String revisionID)
     {
-        String sql;
-        sql = "Select * from CISPACES_NODE_HISTORY WHERE nodeid = " + "'" + nodeID + "'";
-        ArrayList<HashMap<String,Object>> rs = dbcn.execSQL(sql);
+        ArrayList<HashMap<String,Object>> rs = dbcn.executeQuery(
+                "SELECT nodeid FROM CISPACES_NODE_HISTORY WHERE nodeid = ?", nodeID);
         if(rs.isEmpty()){
             System.out.println("NODE DOESNT EXIST IN HISTORY TABLE");
-            sql = "INSERT INTO CISPACES_NODE_HISTORY (nodeid, source, uncert, eval, txt, inp, dtg, cmt, type, annot, graphid, islocked, revisionid) VALUES "
-                    + "( '"+nodeID+"' ,"
-                    + " '"+source+"' ,"
-                    + " '"+uncert+"' ,"
-                    + " '"+eval+"' ,"
-                    + " '"+txt+"' ,"
-                    + " '"+input+"' ,"
-                    + " '"+timestamp+"' ,"
-                    + " '"+commit+"' ,"
-                    + " '"+type+"' ,"
-                    + " '"+annot+"' ,"
-                    + " '"+graphID+"'"
-                    + " '"+isLocked+"'"
-                    + " '"+revisionID+"'"
-                    + " )";
-            System.out.println(sql);
+            dbcn.executeUpdate(
+                    "INSERT INTO CISPACES_NODE_HISTORY (nodeid, source, uncert, eval, txt, inp, dtg, cmt, type, annot, graphid, islocked, revisionid) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    sqlString(nodeID), sqlString(source), sqlString(uncert), sqlString(eval), sqlString(txt),
+                    sqlString(input), sqlTimestamp(timestamp), sqlString(commit), sqlString(type), sqlString(annot),
+                    sqlString(graphID), Boolean.valueOf(isLocked), sqlString(revisionID));
         }else{
             System.out.println("NODE EXISTS IN HISTORY TABLE");
-            sql = "UPDATE CISPACES_NODE SET uncert = " + "'" + uncert + "'" + " ,"
-                    + " eval = " + "'" + eval + "'" + " ,"
-                    + " txt = "  + "'" + txt + "'" + " ,"
-                    + " inp = "  + "'" + input + "'" + " ,"
-                    + " cmt = "  + "'" + commit + "'" + " ,"
-                    + " annot = " + "'" + annot + "'" + " ,"
-                    + " islocked = " + "'" + isLocked + "'"
-                    + " WHERE nodeid = " + "'" + nodeID + "'";
-            System.out.println(sql);
+            dbcn.executeUpdate(
+                    "UPDATE CISPACES_NODE_HISTORY SET uncert = ?, eval = ?, txt = ?, inp = ?, cmt = ?, annot = ?, islocked = ? WHERE nodeid = ?",
+                    sqlString(uncert), sqlString(eval), sqlString(txt), sqlString(input), sqlString(commit),
+                    sqlString(annot), Boolean.valueOf(isLocked), sqlString(nodeID));
         }
-
-        dbcn.updateSQL(sql);
     }
 
     //insert an edge into the database - edges are never updated!
     public void insertEdge(String toID, String fromID, String formEdgeID, String edgeID, String graphID, boolean isLocked) {
-        String sql;
-        sql = "Select * from CISPACES_EDGE WHERE edgeid = " + "'" + edgeID + "'";
-        ArrayList<HashMap<String,Object>> rs = dbcn.execSQL(sql);
+        ArrayList<HashMap<String,Object>> rs = dbcn.executeQuery(
+                "SELECT edgeid FROM CISPACES_EDGE WHERE edgeid = ?", edgeID);
         if(rs.isEmpty()) {
             System.out.println("EDGE DOESNT EXIST");
-            sql = "INSERT INTO CISPACES_EDGE (edgeID, target, source, formEdgeID, graphID, islocked) VALUES "
-                    + "( '" + edgeID + "' ,"
-                    + " '" + toID + "' ,"
-                    + " '" + fromID + "' ,"
-                    + " '" + formEdgeID + "' ,"
-                    + " '" + graphID + "' ,"
-                    + " '" + isLocked + "'"
-                    + " )";
-            dbcn.updateSQL(sql);
+            dbcn.executeUpdate(
+                    "INSERT INTO CISPACES_EDGE (edgeID, target, source, formEdgeID, graphID, islocked) VALUES (?, ?, ?, ?, ?, ?)",
+                    sqlString(edgeID), sqlString(toID), sqlString(fromID), sqlString(formEdgeID),
+                    sqlString(graphID), Boolean.valueOf(isLocked));
         }
-
-        System.out.println(sql);
-
     }
 
     //populate the edge history table
     public void insertEdgeHistory(String toID, String fromID, String formEdgeID, String edgeID, String graphID, boolean isLocked, String revisionID) {
-        String sql;
-        sql = "Select * from CISPACES_EDGE_HISTORY WHERE edgeid = " + "'" + edgeID + "'";
-        ArrayList<HashMap<String,Object>> rs = dbcn.execSQL(sql);
+        ArrayList<HashMap<String,Object>> rs = dbcn.executeQuery(
+                "SELECT edgeid FROM CISPACES_EDGE_HISTORY WHERE edgeid = ?", edgeID);
         if(rs.isEmpty()) {
             System.out.println("EDGE DOESNT EXIST IN HISTORY TABLE");
-            sql = "INSERT INTO CISPACES_EDGE_HISTORY (edgeid, tonodeid, fromnodeid, formedgeid, graphid, islocked, revisionid) VALUES "
-                    + "( '" + edgeID + "' ,"
-                    + " '" + toID + "' ,"
-                    + " '" + fromID + "' ,"
-                    + " '" + formEdgeID + "' ,"
-                    + " '" + graphID + "' ,"
-                    + " '" + isLocked + "' ,"
-                    + " '" + revisionID + "'"
-                    + " )";
-            dbcn.updateSQL(sql);
+            dbcn.executeUpdate(
+                    "INSERT INTO CISPACES_EDGE_HISTORY (edgeid, tonodeid, fromnodeid, formedgeid, graphid, islocked, revisionid) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    sqlString(edgeID), sqlString(toID), sqlString(fromID), sqlString(formEdgeID),
+                    sqlString(graphID), Boolean.valueOf(isLocked), sqlString(revisionID));
         }
-
-        System.out.println(sql);
-
     }
 
     /**
@@ -235,12 +179,10 @@ public class DBQuery {
      */
     public boolean deleteAnalysis(String graphID) {
         //ToDo - get nodeIds and delete from CISPACES_INFOPROV
-        String[] tables = {"CISPACES_GRAPH", "CISPACES_GRAPH_HISTORY", "CISPACES_EDGE",
-        "CISPACES_EDGE_HISTORY", "CISPACES_NODE", "CISPACES_NODE_HISTORY"};
-        String sql;
-        for(String table : tables) {
-            sql = "DELETE FROM "+table+" WHERE graphid = '" + graphID + "'";
-            if(!dbcn.updateSQL(sql)) {
+        for(String table : ANALYSIS_TABLES) {
+            // table is a fixed whitelist, not request data
+            String sql = "DELETE FROM " + table + " WHERE graphid = ?";
+            if(!dbcn.executeUpdate(sql, graphID)) {
             System.out.println("Failed to delete Graph from "+table);
             return false;
             }
@@ -250,20 +192,76 @@ public class DBQuery {
         
     //delete an edge from the database
     public boolean deleteEdge(String edgeid) {
-        String sql = "DELETE FROM CISPACES_EDGE WHERE edgeid = " + "'" + edgeid + "'";
-        System.out.println(sql);
-        boolean isStatementExecuted = dbcn.updateSQL(sql);
-
-        return isStatementExecuted;
+        return dbcn.executeUpdate("DELETE FROM CISPACES_EDGE WHERE edgeid = ?", edgeid);
     }
 
     //delete a node from the database
     public boolean deleteNode(String nodeid) {
-        String sql = "DELETE FROM CISPACES_NODE WHERE nodeid = " + "'" + nodeid + "'";
-        System.out.println(sql);
-        boolean isStatementExecuted = dbcn.updateSQL(sql);
+        return dbcn.executeUpdate("DELETE FROM CISPACES_NODE WHERE nodeid = ?", nodeid);
+    }
 
-        return isStatementExecuted;
+    /**
+     * @return the owning user id, or null when the graph does not exist
+     */
+    public String getGraphOwner(String graphID) {
+        if (graphID == null) {
+            return null;
+        }
+        ArrayList<HashMap<String,Object>> rs = dbcn.executeQuery(
+                "SELECT USERID FROM CISPACES_GRAPH WHERE GRAPHID = ?", graphID);
+        if (rs.isEmpty() || rs.get(0).get("userid") == null) {
+            return null;
+        }
+        return rs.get(0).get("userid").toString();
+    }
+
+    /**
+     * The owner may read. A graph with {@code isshared} set may be read by any authenticated caller.
+     */
+    public boolean callerMayRead(String graphID, String userId) {
+        if (userId == null || userId.trim().isEmpty()) {
+            return false;
+        }
+        String owner = getGraphOwner(graphID);
+        if (owner != null && owner.trim().equals(userId.trim())) {
+            return true;
+        }
+        return isGraphShared(graphID);
+    }
+
+    private boolean isGraphShared(String graphID) {
+        if (graphID == null) {
+            return false;
+        }
+        ArrayList<HashMap<String,Object>> rs = dbcn.executeQuery(
+                "SELECT ISSHARED FROM CISPACES_GRAPH WHERE GRAPHID = ?", graphID);
+        if (rs.isEmpty() || rs.get(0).get("isshared") == null) {
+            return false;
+        }
+        Object flag = rs.get(0).get("isshared");
+        if (flag instanceof Boolean) {
+            return ((Boolean) flag).booleanValue();
+        }
+        return Boolean.parseBoolean(flag.toString().trim());
+    }
+
+    public String graphIdOfNode(String nodeID) {
+        return lookupGraphId("SELECT GRAPHID FROM CISPACES_NODE WHERE NODEID = ?", nodeID);
+    }
+
+    public String graphIdOfEdge(String edgeID) {
+        return lookupGraphId("SELECT GRAPHID FROM CISPACES_EDGE WHERE EDGEID = ?", edgeID);
+    }
+
+    private String lookupGraphId(String sql, String id) {
+        if (id == null) {
+            return null;
+        }
+        ArrayList<HashMap<String,Object>> rs = dbcn.executeQuery(sql, id);
+        if (rs.isEmpty() || rs.get(0).get("graphid") == null) {
+            return null;
+        }
+        return rs.get(0).get("graphid").toString();
     }
 
     /**
@@ -272,9 +270,8 @@ public class DBQuery {
      * @return a JSON representation of the record, null if none
      */
     public JSONObject getUserByUsername(String username) {
-        String sql = "SELECT * FROM CISPACES_USERS WHERE USERNAME = '"+username+"'";
-        System.out.println(sql);
-        ArrayList<HashMap<String,Object>> rs = dbcn.execSQL(sql); 
+        ArrayList<HashMap<String,Object>> rs = dbcn.executeQuery(
+                "SELECT * FROM CISPACES_USERS WHERE USERNAME = ?", username);
         if(rs.isEmpty()) return null;
         else return (JSONObject) getResultListJSON(rs).get(0);
     }
@@ -287,20 +284,13 @@ public class DBQuery {
      * @return The newly generated user_id, or null if the user could not be added
      */
     public String insertUser(String username, String generatedSecuredPasswordHash, String affiliation) {
-        String sqlCheckUser = "SELECT * FROM CISPACES_USERS WHERE USERNAME = '"+username+"'";
-        System.out.println(sqlCheckUser);
-        ArrayList<HashMap<String,Object>> rs = dbcn.execSQL(sqlCheckUser);        
+        ArrayList<HashMap<String,Object>> rs = dbcn.executeQuery(
+                "SELECT USER_ID FROM CISPACES_USERS WHERE USERNAME = ?", username);
         if(rs.isEmpty()){
             //Username doesn't exist, try to add it        
             String userID = UUID.randomUUID().toString();
-            String sql = "INSERT INTO CISPACES_USERS (USER_ID, USERNAME, PASSWORD, AFFILIATION, IS_ADMIN) VALUES( "
-                + "'" + userID + "',"
-                + "'" + username + "',"
-                + "'" + generatedSecuredPasswordHash + "',"
-                + "'" + affiliation + "',"
-                + "0)";        
-            System.out.println(sql);
-            if(dbcn.updateSQL(sql)){
+            String sql = "INSERT INTO CISPACES_USERS (USER_ID, USERNAME, PASSWORD, AFFILIATION, IS_ADMIN) VALUES (?, ?, ?, ?, ?)";
+            if(dbcn.executeUpdate(sql, userID, sqlString(username), sqlString(generatedSecuredPasswordHash), sqlString(affiliation), Integer.valueOf(0))){
                 return userID; // User added successfully
             }
             else{
@@ -317,9 +307,8 @@ public class DBQuery {
      * @return The analyses as a JSON formatted string
      */
     public String getAnalysesMetaByUser(String userID) {
-        String sql = "SELECT * FROM CISPACES_GRAPH WHERE USERID = '"+ userID + "'";
-        //JSONObject jsonGraph = new JSONObject();
-        ArrayList<HashMap<String,Object>> rs = dbcn.execSQL(sql);
+        ArrayList<HashMap<String,Object>> rs = dbcn.executeQuery(
+                "SELECT * FROM CISPACES_GRAPH WHERE USERID = ?", userID);
         JSONArray jsonAnalysesMetaArray = new JSONArray();
         for(HashMap graphIdMap : rs) { 
             JSONObject jsonGraph = new JSONObject();
@@ -345,8 +334,8 @@ public class DBQuery {
      */
     public String getAnalysisMeta(String graphID) {
         System.out.println("Fetching Analysis metadata for graphid: "+graphID);
-        String getMetaSql = "SELECT * FROM CISPACES_GRAPH WHERE GRAPHID = '" + graphID + "'";
-        ArrayList<HashMap<String, Object>> graphMeta = dbcn.execSQL(getMetaSql);
+        ArrayList<HashMap<String, Object>> graphMeta = dbcn.executeQuery(
+                "SELECT * FROM CISPACES_GRAPH WHERE GRAPHID = ?", graphID);
         
         if(!graphMeta.isEmpty()) {
             JSONObject jsonGraph = new JSONObject();
@@ -363,6 +352,17 @@ public class DBQuery {
             return null; //Not found
         }
     }//getAnalysis
+
+    /**
+     * Metadata for a caller who owns the graph or is reading a shared graph.
+     * @return null when the graph is missing or the caller may not read it
+     */
+    public String getAnalysisMeta(String graphID, String caller) {
+        if (!callerMayRead(graphID, caller)) {
+            return null;
+        }
+        return getAnalysisMeta(graphID);
+    }
     
     /**
      * Return an analysis as JSON, based on a graph id.
@@ -371,10 +371,8 @@ public class DBQuery {
      */
     public String getAnalysis(String graphID) {
         System.out.println("Fetching Analysis for graphid: "+graphID);
-        String getMetaSql = "SELECT * FROM CISPACES_GRAPH WHERE GRAPHID = '" + graphID + "'";
-        String getNodesSql = "SELECT * FROM CISPACES_NODE WHERE GRAPHID = '" + graphID + "'";
-        String getEdgesSql = "SELECT * FROM CISPACES_EDGE WHERE GRAPHID = '" + graphID + "'";
-        ArrayList<HashMap<String, Object>> graphMeta = dbcn.execSQL(getMetaSql);
+        ArrayList<HashMap<String, Object>> graphMeta = dbcn.executeQuery(
+                "SELECT * FROM CISPACES_GRAPH WHERE GRAPHID = ?", graphID);
         
         if(!graphMeta.isEmpty()) {
             JSONObject jsonGraph = new JSONObject();
@@ -386,11 +384,13 @@ public class DBQuery {
             jsonGraph.put("isshared", (String) graphMeta.get(0).get("isshared"));
             jsonGraph.put("parentgraphid", (String) graphMeta.get(0).get("parentgraphid"));            
             
-            ArrayList<HashMap<String, Object>> resultNodes = dbcn.execSQL(getNodesSql);
+            ArrayList<HashMap<String, Object>> resultNodes = dbcn.executeQuery(
+                    "SELECT * FROM CISPACES_NODE WHERE GRAPHID = ?", graphID);
             JSONArray jsonNodesArray = getResultListJSON(resultNodes);       
             jsonGraph.put("nodes", jsonNodesArray);           
             
-            ArrayList<HashMap<String, Object>> resultEdges = dbcn.execSQL(getEdgesSql);
+            ArrayList<HashMap<String, Object>> resultEdges = dbcn.executeQuery(
+                    "SELECT * FROM CISPACES_EDGE WHERE GRAPHID = ?", graphID);
             JSONArray jsonEdgesArray = getResultListJSON(resultEdges);
             jsonGraph.put("edges", jsonEdgesArray);
 
@@ -399,7 +399,18 @@ public class DBQuery {
         else {
             return null; //Not found
         }
-    }//getAnalysis      
+    }//getAnalysis
+
+    /**
+     * Full analysis for a caller who owns the graph or is reading a shared graph.
+     * @return null when the graph is missing or the caller may not read it
+     */
+    public String getAnalysis(String graphID, String caller) {
+        if (!callerMayRead(graphID, caller)) {
+            return null;
+        }
+        return getAnalysis(graphID);
+    }
    
     //DEPRECATED REMOVE SOON
 //    /* Retrieves the latest analysis associated with a user upon loading the index page.
@@ -462,13 +473,12 @@ public class DBQuery {
     * Timestamps the event and inserts the data into the database.
     */
      public String saveLatestAnalysis(String graphID, String userID, String title) {
-        String getNodesSql = "SELECT * FROM CISPACES_NODE WHERE GRAPHID = " +  "'" + graphID + "'";
-        String getEdgesSql = "SELECT * FROM CISPACES_EDGE WHERE GRAPHID = " +  "'" + graphID + "'";
-
         JSONObject jsonGraph = new JSONObject();
         jsonGraph.put("graphID",graphID);
-        ArrayList<HashMap<String,Object>> resultNodes = dbcn.execSQL(getNodesSql);
-        ArrayList<HashMap<String,Object>> resultEdges = dbcn.execSQL(getEdgesSql);
+        ArrayList<HashMap<String,Object>> resultNodes = dbcn.executeQuery(
+                "SELECT * FROM CISPACES_NODE WHERE GRAPHID = ?", graphID);
+        ArrayList<HashMap<String,Object>> resultEdges = dbcn.executeQuery(
+                "SELECT * FROM CISPACES_EDGE WHERE GRAPHID = ?", graphID);
 
         JSONArray jsonNodesArray =  getResultListJSON(resultNodes);
         jsonGraph.put("nodes",jsonNodesArray);
@@ -484,15 +494,9 @@ public class DBQuery {
         String snapID = UUID.randomUUID().toString();
         Timestamp timestamp = timeHelper.formatDateObjectCIS(now);
 
-        String saveGraphQuery = "INSERT INTO CISPACES_GRAPH_HISTORY(snapid, graphid, userid, timest, analysis, title) VALUES "
-                + "( '" + snapID + "' ,"
-                + " '" + graphID + "' ,"
-                + " '" + userID + "' ,"
-                + " '" + timestamp + "' ,"
-                + " '" + json + "' ,"
-                + " '" + title + "'"
-                + " )";
-        boolean isExecuted = dbcn.updateSQL(saveGraphQuery);
+        String saveGraphQuery = "INSERT INTO CISPACES_GRAPH_HISTORY(snapid, graphid, userid, timest, analysis, title) VALUES (?, ?, ?, ?, ?, ?)";
+        // analysis is a CLOB; insertClob binds it with setString rather than embedding the JSON in quotes
+        boolean isExecuted = dbcn.insertClob(saveGraphQuery, snapID, graphID, userID, timestamp, json, sqlString(title));
         JSONObject result = new JSONObject();
         result.put("status",isExecuted);
 
@@ -510,6 +514,10 @@ public class DBQuery {
             while (entryIterator.hasNext()) {
                 //Each property of the node or edge
                 Map.Entry pair = (Map.Entry)entryIterator.next();
+                if (pair.getValue() == null) {
+                    obj.put(pair.getKey(), null);
+                    continue;
+                }
                 //these are reserved words in derby!!!                    
                 if(pair.getKey().toString().equals("annot")){                        
                     // Expand the annot and set as a JSONArray                        
@@ -569,9 +577,8 @@ public class DBQuery {
 
         //constructs a json object containing all saved variations of an analysis and returns it in a json string format
     public String getHistoryOfAnalysis(String graphID) {
-        String sql = "SELECT * FROM CISPACES_GRAPH_HISTORY WHERE GRAPHID = " + "'" + graphID + "'" + " ORDER BY TIMEST";
-        System.out.println(sql);
-        ArrayList<HashMap<String,Object>> rs = dbcn.execSQL(sql);
+        ArrayList<HashMap<String,Object>> rs = dbcn.executeQuery(
+                "SELECT * FROM CISPACES_GRAPH_HISTORY WHERE GRAPHID = ? ORDER BY TIMEST", graphID);
         JSONObject jsonHistory = new JSONObject();
         if(!rs.isEmpty()){
             JSONArray jsonHistoryArray = getResultListJSON(rs);
@@ -585,87 +592,207 @@ public class DBQuery {
         return jsonHistory.toString();
     }
 
-    public void updateAnalysis(HashMap analysis) {
+    /**
+     * History for a caller who owns the graph or is reading a shared graph.
+     * @return null when the graph is missing or the caller may not read it
+     */
+    public String getHistoryOfAnalysis(String graphID, String caller) {
+        if (!callerMayRead(graphID, caller)) {
+            return null;
+        }
+        return getHistoryOfAnalysis(graphID);
+    }
 
-       // dbcn.setAutoCommit(false);
-        org.json.JSONObject obj = new org.json.JSONObject(analysis);
+    /**
+     * Replace the live nodes and edges of a graph with a history snapshot.
+     * Deletes and inserts share one connection with auto-commit off. A failed insert rolls the deletes back.
+     * @return false when the snapshot was not applied
+     */
+    public boolean updateAnalysis(HashMap analysis) {
+        if (analysis == null) {
+            return false;
+        }
+        org.json.JSONObject obj;
+        try {
+            obj = new org.json.JSONObject(analysis);
+        } catch (RuntimeException ex) {
+            log.log(Level.SEVERE, "updateAnalysis rejected a snapshot that is not an object", ex);
+            return false;
+        }
+        if (!obj.has("graphID") || obj.isNull("graphID") || !obj.has("nodes") || !obj.has("edges")) {
+            log.log(Level.SEVERE, "updateAnalysis snapshot is missing graphID, nodes, or edges");
+            return false;
+        }
+        String oldGraphID = obj.getString("graphID").trim();
+        if (oldGraphID.isEmpty() || !elementsTargetGraph(obj, oldGraphID)) {
+            log.log(Level.SEVERE, "updateAnalysis rejected a snapshot whose node or edge graphID does not match the owned graph");
+            return false;
+        }
 
-        String oldGraphID = obj.getString("graphID");
-        System.out.println(oldGraphID + " is the graphID");
-        String sql = "DELETE FROM CISPACES_NODE WHERE GRAPHID = " + "'" + oldGraphID + "'";
-        String sql2 = "DELETE FROM CISPACES_EDGE WHERE GRAPHID = " + "'" + oldGraphID + "'";
-        System.out.println(sql);
-        dbcn.updateSQL(sql);
-        dbcn.updateSQL(sql2);
+        if (!dbcn.beginTransaction()) {
+            return false;
+        }
+        try {
+            if (!dbcn.executeUpdate("DELETE FROM CISPACES_NODE WHERE GRAPHID = ?", oldGraphID)) {
+                dbcn.rollback();
+                return false;
+            }
+            if (!dbcn.executeUpdate("DELETE FROM CISPACES_EDGE WHERE GRAPHID = ?", oldGraphID)) {
+                dbcn.rollback();
+                return false;
+            }
 
-
-        dbcn.tryConnect();
             org.json.JSONArray nodes = obj.getJSONArray("nodes");
-            //iterate through nodes
             for (int i = 0; i < nodes.length(); i++) {
-                String input = tryToGet(nodes.getJSONObject(i), "input");
-                String eval = tryToGet(nodes.getJSONObject(i), "eval");
-                String source = tryToGet(nodes.getJSONObject(i), "source");
-                String uncert = tryToGet(nodes.getJSONObject(i), "uncert");
-                String text = tryToGet(nodes.getJSONObject(i), "text");
-                String dtg = tryToGet(nodes.getJSONObject(i), "dtg");
-                String commit = tryToGet(nodes.getJSONObject(i), "commit");
-                String type = tryToGet(nodes.getJSONObject(i), "type");
-                String nodeID = tryToGet(nodes.getJSONObject(i), "nodeID");
-                System.out.println(nodeID + " is the node id");
-                String annot = tryToGet(nodes.getJSONObject(i), "annot");
-                String graphID = tryToGet(nodes.getJSONObject(i), "graphID");
-                String isLocked = tryToGet(nodes.getJSONObject(i), "islocked");
-
-                String sql3 = "INSERT INTO CISPACES_NODE (nodeid, source, uncert, eval, txt, inp, dtg, cmt, type, annot, graphid, islocked) VALUES "
-                        + "( '" + nodeID + "' ,"
-                        + " '" + source + "' ,"
-                        + " '" + uncert + "' ,"
-                        + " '" + eval + "' ,"
-                        + " '" + text + "' ,"
-                        + " '" + input + "' ,"
-                        + " '" + dtg + "' ,"
-                        + " '" + commit + "' ,"
-                        + " '" + type + "' ,"
-                        + " '" + annot + "' ,"
-                        + " '" + graphID + "' ,"
-                        + " '" + isLocked + "'"
-                        + " )";
-                dbcn.prepareInsertStatementInTransaction(sql3);
-                System.out.println(sql3);
-
+                org.json.JSONObject node = nodes.getJSONObject(i);
+                String nodeID = tryToGet(node, "nodeID");
+                String commit = firstString(node, "commit", "cmt");
+                if (!dbcn.executeUpdate(
+                        "INSERT INTO CISPACES_NODE (nodeid, source, uncert, eval, txt, inp, dtg, cmt, type, annot, graphid, islocked) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        sqlString(nodeID),
+                        sqlString(tryToGet(node, "source")),
+                        sqlString(tryToGet(node, "uncert")),
+                        sqlString(tryToGet(node, "eval")),
+                        sqlString(tryToGet(node, "text")),
+                        sqlString(tryToGet(node, "input")),
+                        sqlTimestamp(parseTimestamp(tryToGet(node, "dtg"))),
+                        sqlString(commit),
+                        sqlString(tryToGet(node, "type")),
+                        sqlString(annotForStorage(node)),
+                        sqlString(oldGraphID),
+                        Boolean.valueOf(parseBooleanFlag(firstString(node, "islocked", "isLocked"))))) {
+                    dbcn.rollback();
+                    return false;
+                }
             }
 
             org.json.JSONArray edges = obj.getJSONArray("edges");
             for (int i = 0; i < edges.length(); i++) {
-                String edgeid = tryToGet(edges.getJSONObject(i), "edgeID");
-                String islocked = tryToGet(edges.getJSONObject(i), "islocked");
-                String source = tryToGet(edges.getJSONObject(i), "source");
-                String formedgeid = tryToGet(edges.getJSONObject(i), "formedgeid");
-                String graphID = tryToGet(edges.getJSONObject(i), "graphID");
-                String target = tryToGet(edges.getJSONObject(i), "target");
-
-                String sql4 = "INSERT INTO CISPACES_EDGE (edgeID, target, source, formEdgeID, graphID, islocked) VALUES "
-                        + "( '" + edgeid + "' ,"
-                        + " '" + target + "' ,"
-                        + " '" + source + "' ,"
-                        + " '" + formedgeid + "' ,"
-                        + " '" + graphID + "' ,"
-                        + " '" + islocked + "'"
-                        + " )";
-                dbcn.prepareInsertStatementInTransaction(sql4);
-                System.out.println(sql4);
+                org.json.JSONObject edge = edges.getJSONObject(i);
+                if (!dbcn.executeUpdate(
+                        "INSERT INTO CISPACES_EDGE (edgeID, target, source, formEdgeID, graphID, islocked) VALUES (?, ?, ?, ?, ?, ?)",
+                        sqlString(firstString(edge, "edgeID", "edgeid")),
+                        sqlString(tryToGet(edge, "target")),
+                        sqlString(tryToGet(edge, "source")),
+                        sqlString(firstString(edge, "formedgeid", "formEdgeID")),
+                        sqlString(oldGraphID),
+                        Boolean.valueOf(parseBooleanFlag(firstString(edge, "islocked", "isLocked"))))) {
+                    dbcn.rollback();
+                    return false;
+                }
             }
 
-            dbcn.commit();
-
-
+            return dbcn.commitTransaction();
+        } catch (RuntimeException ex) {
+            log.log(Level.SEVERE, "updateAnalysis failed and was rolled back", ex);
+            dbcn.rollback();
+            return false;
+        }
     }
 
 
+    /**
+     * Every node and edge must name the snapshot graph, or omit a graph id.
+     * A different id is rejected so an import cannot write into another analysis.
+     */
+    public static boolean elementsTargetGraph(org.json.JSONObject snapshot, String graphID) {
+        if (snapshot == null || graphID == null || graphID.trim().isEmpty()) {
+            return false;
+        }
+        String expected = graphID.trim();
+        return arrayTargetsGraph(snapshot.optJSONArray("nodes"), expected)
+                && arrayTargetsGraph(snapshot.optJSONArray("edges"), expected);
+    }
+
+    private static boolean arrayTargetsGraph(org.json.JSONArray elements, String expected) {
+        if (elements == null) {
+            return false;
+        }
+        for (int i = 0; i < elements.length(); i++) {
+            org.json.JSONObject element = elements.optJSONObject(i);
+            if (element == null) {
+                return false;
+            }
+            String nested = firstString(element, "graphID", "graphid");
+            if (nested != null && !nested.trim().equals(expected)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     public static String tryToGet(org.json.JSONObject jsonObj, String key) {
-        if (jsonObj.has(key))
-            return jsonObj.opt(key).toString();
+        if (jsonObj == null || key == null || !jsonObj.has(key) || jsonObj.isNull(key)) {
+            return null;
+        }
+        Object value = jsonObj.opt(key);
+        return value == null ? null : value.toString();
+    }
+
+    /**
+     * History JSON stores annot as an object. The reader still expects the stored
+     * form {@code key=value}, which is what a live node insert writes.
+     */
+    private static String annotForStorage(org.json.JSONObject node) {
+        if (node == null || !node.has("annot") || node.isNull("annot")) {
+            return null;
+        }
+        Object raw = node.opt("annot");
+        if (!(raw instanceof org.json.JSONObject)) {
+            return raw.toString();
+        }
+        org.json.JSONObject annot = (org.json.JSONObject) raw;
+        if (annot.length() == 0) {
+            return "{}";
+        }
+        StringBuilder stored = new StringBuilder();
+        Iterator<?> keys = annot.keys();
+        while (keys.hasNext()) {
+            String key = String.valueOf(keys.next());
+            if (stored.length() > 0) {
+                stored.append(',');
+            }
+            stored.append(key).append('=').append(annot.opt(key));
+        }
+        return stored.toString();
+    }
+
+    private static String firstString(org.json.JSONObject jsonObj, String... keys) {
+        if (keys == null) {
+            return null;
+        }
+        for (String key : keys) {
+            String value = tryToGet(jsonObj, key);
+            if (value != null) {
+                return value;
+            }
+        }
         return null;
+    }
+
+    private static boolean parseBooleanFlag(String value) {
+        return value != null && Boolean.parseBoolean(value.trim());
+    }
+
+    private static Timestamp parseTimestamp(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        if (trimmed.isEmpty() || "null".equalsIgnoreCase(trimmed)) {
+            return null;
+        }
+        if (trimmed.endsWith(".0")) {
+            trimmed = trimmed.substring(0, trimmed.length() - 2);
+        }
+        return Timestamp.valueOf(trimmed);
+    }
+
+    private static Object sqlString(String value) {
+        return value == null ? SqlNull.varchar() : value;
+    }
+
+    private static Object sqlTimestamp(Timestamp value) {
+        return value == null ? SqlNull.timestamp() : value;
     }
 }

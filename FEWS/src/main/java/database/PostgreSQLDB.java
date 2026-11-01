@@ -132,12 +132,12 @@ public class PostgreSQLDB {
         ResultSet resultSet = null;
 
         List<Tweet> tweetList = new ArrayList<>();
+        List<Object> parameters = new ArrayList<>();
 
         try {
             if (!connect()) { return null; }
 
-            // Build up the SQL query using a subquery for each topic - allows consistency
-            // May as well do it in one pass without PreparedQuery since we need to convert bool3 anyway
+            // One prepared statement. Topic names and the three-state flags are bound, not concatenated.
             StringBuilder queryString = new StringBuilder(
                     // Get the tables we want data from
                     "SELECT DISTINCT ON (extract.item_key) " +
@@ -164,18 +164,31 @@ public class PostgreSQLDB {
                             "FROM factextract.phase1_ext_db_topic as topic " +
                             "JOIN factextract.phase1_ext_db_topic_index as topic_index " +
                             "ON (topic.topic_key = topic_index.topic_key) " +
-                            "WHERE topic.topic = '" + topic.getName() + "' " +
-                            // Database column has three states in a BOOLEAN
-                            // Simpler to do this than try to use a prepared query
-                            "AND topic.negated IS " + getStringRepOfBool3(topic.isNegated()) + " " +
-                            "AND topic.genuine IS " + getStringRepOfBool3(topic.isGenuine()) + " " +
+                            "WHERE topic.topic = ? " +
+                            // TRUE, FALSE, and NULL stay distinct. IS NOT DISTINCT FROM matches all three.
+                            "AND topic.negated IS NOT DISTINCT FROM ? " +
+                            "AND topic.genuine IS NOT DISTINCT FROM ? " +
                         ") "
                 );
+                parameters.add(topic.getName());
+                parameters.add(bool3ToBoolean(topic.isNegated()));
+                parameters.add(bool3ToBoolean(topic.isGenuine()));
             }
-            queryString.append("ORDER BY extract.item_key;");
+            queryString.append("ORDER BY extract.item_key");
 
-            statement = conn.createStatement();
-            resultSet = statement.executeQuery(queryString.toString());
+            PreparedStatement prepared = conn.prepareStatement(queryString.toString());
+            statement = prepared;
+            for (int p = 0; p < parameters.size(); p++) {
+                Object value = parameters.get(p);
+                if (value == null) {
+                    prepared.setNull(p + 1, Types.BOOLEAN);
+                } else if (value instanceof Boolean) {
+                    prepared.setBoolean(p + 1, ((Boolean) value).booleanValue());
+                } else {
+                    prepared.setString(p + 1, value.toString());
+                }
+            }
+            resultSet = prepared.executeQuery();
 
             while (resultSet.next()) {
                 int id = resultSet.getInt("item_key");
@@ -217,22 +230,16 @@ public class PostgreSQLDB {
     }
 
     /**
-     * Get the String representation of a Bool3.
-     * Values:
-     *   1 -> "TRUE"
-     *   0 -> "FALSE"
-     *  -1 -> "NULL"
-     *
-     * @param bool3 Integer representation of a Bool3 {-1, 0, 1}
-     * @return String representation of a Bool3
+     * Map the integer Bool3 onto a Boolean parameter.
+     * 1 is TRUE, 0 is FALSE, and any other value is NULL.
      */
-    private static String getStringRepOfBool3(int bool3) {
+    private static Boolean bool3ToBoolean(int bool3) {
         if (bool3 == 0) {
-            return "FALSE";
+            return Boolean.FALSE;
         } else if (bool3 == 1) {
-            return "TRUE";
+            return Boolean.TRUE;
         } else {
-            return "NULL";
+            return null;
         }
     }
 

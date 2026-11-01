@@ -10,6 +10,8 @@ package vcservlet;
 
 import database.DBQuery;
 import filters.JWTTokenNeeded;
+import filters.JWTTokenNeededFilter;
+import filters.JwtSubjects;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import javax.ws.rs.*;
@@ -18,9 +20,12 @@ import java.util.logging.Level;
 
 import javax.persistence.EntityManager;
 import javax.persistence.PersistenceContext;
+import javax.ws.rs.WebApplicationException;
+import javax.ws.rs.container.ContainerRequestContext;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.UriInfo;
+import org.json.JSONObject;
 import java.security.Key;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -42,6 +47,9 @@ public class VCServlet {
 
     @Context
     private UriInfo uriInfo;
+
+    @Context
+    private ContainerRequestContext requestContext;
 
     @PersistenceContext
     private EntityManager em;
@@ -69,12 +77,13 @@ public class VCServlet {
      */
     @GET
     @Path("/history")
+    @JWTTokenNeeded
     @Produces(MediaType.APPLICATION_JSON)
-    public String getHistory(@CookieParam("graph_id") String graphID){
+    public Response getHistory(@CookieParam("graph_id") String graphID){
         log.log(Level.INFO, "*** VERSION CONTROL SERVICE - GET HISTORY REQUEST ***");
-        DBQuery dbQuery  = new DBQuery();
-        String response = dbQuery.getHistoryOfAnalysis(graphID);
-        return response;
+        String caller = authenticatedUserId();
+        String response = new DBQuery().getHistoryOfAnalysis(graphID, caller);
+        return readAnalysisForCaller(graphID, response);
     }
 
     
@@ -116,11 +125,12 @@ public class VCServlet {
      */
     @GET
     @Path("/analyses/user/{userID}/meta")
-    //@JWTTokenNeeded
+    @JWTTokenNeeded
     @Produces(MediaType.APPLICATION_JSON)
     public Response getAnalysesMetaByUserId(@PathParam("userID") String userID) {       
         log.log(Level.INFO, "*** VERSION CONTROL SERVICE - GET ANALYSES METADATA REQUEST");
         if(userID != null) {
+            requireCaller(userID);
             log.log(Level.INFO, "** USER_ID="+userID);
             DBQuery dbquery = new DBQuery();
             String analyses = dbquery.getAnalysesMetaByUser(userID);
@@ -149,18 +159,16 @@ public class VCServlet {
     */
     @GET
     @Path("/analysis/{graphID}/meta")
-    //@JWTTokenNeeded
+    @JWTTokenNeeded
     @Produces(MediaType.APPLICATION_JSON)
     public Response getAnalysisMeta(@PathParam("graphID") String graphID) {       
         log.log(Level.INFO, "*** VERSION CONTROL SERVICE - GET ANALYSIS METADATA REQUEST");
         if(graphID != null) {
             log.log(Level.INFO, "** GRAPH_ID="+graphID);
-            DBQuery dbquery = new DBQuery();
-            String analysis = dbquery.getAnalysisMeta(graphID);
-            if(analysis != null)  return Response.ok().entity(analysis).build();
-            else return Response.status(Response.Status.NOT_FOUND).build();
         }
-        else return Response.status(Response.Status.NOT_FOUND).build();
+        String caller = authenticatedUserId();
+        String analysis = new DBQuery().getAnalysisMeta(graphID, caller);
+        return readAnalysisForCaller(graphID, analysis);
     }//getAnalysisMeta
     
     
@@ -184,28 +192,26 @@ public class VCServlet {
     */
     @GET
     @Path("/analysis/{graphID}")
-    //@JWTTokenNeeded
+    @JWTTokenNeeded
     @Produces(MediaType.APPLICATION_JSON)
     public Response getAnalysis(@PathParam("graphID") String graphID) {       
         log.log(Level.INFO, "*** VERSION CONTROL SERVICE - GET ANALYSIS REQUEST");
         if(graphID != null) {
             log.log(Level.INFO, "** GRAPH_ID="+graphID);
-            DBQuery dbquery = new DBQuery();
-            String analysis = dbquery.getAnalysis(graphID);
-            if(analysis != null)  return Response.ok().entity(analysis).build();
-            else return Response.status(Response.Status.NOT_FOUND).build();
         }
-        else return Response.status(Response.Status.NOT_FOUND).build();
+        String caller = authenticatedUserId();
+        String analysis = new DBQuery().getAnalysis(graphID, caller);
+        return readAnalysisForCaller(graphID, analysis);
     }//getAnalysis    
     
     @DELETE
     @Path("/analysis/{graphID}")
-    //@JWTTokenNeeded
+    @JWTTokenNeeded
     @Produces(MediaType.APPLICATION_JSON)
     public Response deleteAnalysis(@PathParam("graphID") String graphID) {       
         log.log(Level.INFO, "*** VERSION CONTROL SERVICE - DELETE ANALYSIS REQUEST");
-        //ToDo - Check ownership
         if(graphID != null) {
+            requireGraphOwner(graphID);
             log.log(Level.INFO, "** GRAPH_ID="+graphID);
             DBQuery dbquery = new DBQuery();           
             if(dbquery.deleteAnalysis(graphID)) return Response.ok().build();
@@ -263,8 +269,13 @@ public class VCServlet {
         String userInfo = vcForkControl.evalJSONLoginUser(userData);
         if(userInfo != null) {
             
-            // Authenticated successfully - Issue a token for the user
-            String token = issueToken(userInfo);
+            // Subject is the user id so later requests can be checked against the graph owner.
+            String userId = JwtSubjects.userId(userInfo);
+            if (userId == null || userId.isEmpty()) {
+                log.log(Level.SEVERE, "Authenticated user record has no user_id");
+                return Response.status(Response.Status.INTERNAL_SERVER_ERROR).build();
+            }
+            String token = issueToken(userId);
  
             // Return the token on the response
             return Response.ok()
@@ -335,15 +346,20 @@ public class VCServlet {
      */
     @POST
     @Path("/new")
+    @JWTTokenNeeded
     @Consumes(MediaType.APPLICATION_JSON)
-    public void createNewGraph(String graph){
+    public Response createNewGraph(String graph){
         log.log(Level.INFO, "*** VERSION CONTROL SERVICE - New Graph Request ***");
+        requireCaller(stringField(graph, "userID"));
 
         VCForkControl vcControl = new VCForkControl();
-        vcControl.evalJSONGraph(graph);
+        boolean inserted = vcControl.evalJSONGraph(graph);
 
         log.log(Level.INFO,"*** VERSION CONTROL SERVICE - New Graph Request Handled ***");
-
+        if (!inserted) {
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).build();
+        }
+        return Response.noContent().build();
     }
 
     /**
@@ -355,17 +371,22 @@ public class VCServlet {
      */
     @POST
     @Path("/save")
+    @JWTTokenNeeded
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    public String saveGraph(String graphInfo){
+    public Response saveGraph(String graphInfo){
         log.log(Level.INFO, "*** VERSION CONTROL SERVICE - Save Graph Request ***");
+        requireGraphOwner(stringField(graphInfo, "graphID"));
 
         VCForkControl vcForkControl = new VCForkControl();
         String result = vcForkControl.evalJSONSaveAnalysis(graphInfo);
 
         log.log(Level.INFO,"*** VERSION CONTROL SERVICE - Save Graph Request Handled ***");
 
-        return result;
+        if (result == null || result.contains("\"status\":false")) {
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity(result).type(MediaType.APPLICATION_JSON).build();
+        }
+        return Response.ok(result, MediaType.APPLICATION_JSON).build();
     }
 
 
@@ -376,10 +397,12 @@ public class VCServlet {
      */
     @Path("/edge/{edgeid}")
     @POST
+    @JWTTokenNeeded
     @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.APPLICATION_JSON)
     public String getJSONInputEdge(String edge){
         log.log(Level.INFO, "*** VERSION CONTROL SERVICE - New Edge Request ***");
+        requireEdgeMutation(edge);
 
         VCForkControl vcControl = new VCForkControl();
         String out = vcControl.evalJSONEdge(edge);
@@ -397,10 +420,12 @@ public class VCServlet {
      */
     @Path("/node/{nodeid}")
     @POST
+    @JWTTokenNeeded
     @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.APPLICATION_JSON)
     public String getJSONInputNode(String json){
         log.log(Level.INFO, "*** VERSION CONTROL SERVICE - New Node Request ***");
+        requireNodeMutation(json);
 
         VCForkControl vcControl = new VCForkControl();
         String out = vcControl.evalJSONNode(json);
@@ -417,10 +442,12 @@ public class VCServlet {
      */
     @Path("/edge/{edgeid}")
     @PUT
+    @JWTTokenNeeded
     @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.APPLICATION_JSON)
     public String putEdge(String json){
         log.log(Level.INFO, "*** VERSION CONTROL SERVICE - Put Edge Request ***");
+        requireEdgeMutation(json);
         VCForkControl vcControl = new VCForkControl();
         String out = vcControl.evalJSONEdge(json);
         return out;
@@ -433,10 +460,12 @@ public class VCServlet {
      */
     @Path("/node/{nodeid}")
     @PUT
+    @JWTTokenNeeded
     @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.APPLICATION_JSON)
     public String putNode(String json){
         log.log(Level.INFO, "*** VERSION CONTROL SERVICE - Put Node Request ***");
+        requireNodeMutation(json);
         VCForkControl vcControl = new VCForkControl();
         String out = vcControl.evalJSONNode(json);
         return out;
@@ -450,12 +479,14 @@ public class VCServlet {
      */
     @Path("/edge/{edgeid}")
     @DELETE
+    @JWTTokenNeeded
     @Produces(MediaType.TEXT_PLAIN)
     @Consumes(MediaType.APPLICATION_JSON)
     public boolean deleteEdge(@PathParam("edgeid") String edgeid){
         log.log(Level.INFO, "*** VERSION CONTROL SERVICE - Delete Edge Request ***");
 
         DBQuery dbQuery = new DBQuery();
+        requireGraphOwner(dbQuery.graphIdOfEdge(edgeid));
         boolean isDeleted = dbQuery.deleteEdge(edgeid);
 
         log.log(Level.INFO,"*** VERSION CONTROL SERVICE - Delete Edge Request Handled ***");
@@ -470,12 +501,14 @@ public class VCServlet {
      */
     @Path("/node/{nodeid}")
     @DELETE
+    @JWTTokenNeeded
     @Produces(MediaType.TEXT_PLAIN)
     @Consumes(MediaType.APPLICATION_JSON)
     public boolean deleteNode(@PathParam("nodeid") String nodeid){
         log.log(Level.INFO, "*** VERSION CONTROL SERVICE - Delete Node Request ***");
 
         DBQuery dbQuery = new DBQuery();
+        requireGraphOwner(dbQuery.graphIdOfNode(nodeid));
         boolean isDelelted = dbQuery.deleteNode(nodeid);
 
         log.log(Level.INFO,"*** VERSION CONTROL SERVICE - Delete Node Request Handled ***");
@@ -490,14 +523,118 @@ public class VCServlet {
      */
     @Path("/updateAnalysis")
     @POST
+    @JWTTokenNeeded
     @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.APPLICATION_JSON)
-    public void updateAnalysis(String analysis){
+    public Response updateAnalysis(String analysis){
         log.log(Level.INFO, "*** VERSION CONTROL SERVICE - Update Analysis Request");
+        String graphId = stringField(analysis, "graphID");
+        requireGraphOwner(graphId);
+        if (!snapshotTargetsGraph(analysis, graphId)) {
+            throw new WebApplicationException(Response.Status.BAD_REQUEST);
+        }
 
         VCForkControl vcForkControl = new VCForkControl();
-        vcForkControl.evalJSONUpdateAnalysis(analysis);
+        if (!vcForkControl.evalJSONUpdateAnalysis(analysis)) {
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).build();
+        }
+        return Response.ok().build();
+    }
 
+    private String authenticatedUserId() {
+        if (requestContext == null) {
+            return null;
+        }
+        Object subject = requestContext.getProperty(JWTTokenNeededFilter.JWT_SUBJECT);
+        if (subject == null) {
+            return null;
+        }
+        return JwtSubjects.userId(subject.toString());
+    }
+
+    private void requireCaller(String userId) {
+        String caller = authenticatedUserId();
+        if (caller == null || caller.isEmpty()) {
+            throw new WebApplicationException(Response.Status.UNAUTHORIZED);
+        }
+        if (userId == null || !caller.equals(userId.trim())) {
+            throw new WebApplicationException(Response.Status.FORBIDDEN);
+        }
+    }
+
+    /**
+     * Owner reads succeed. A shared graph is readable by any authenticated caller.
+     * Missing graphs are 404. Someone else's unshared graph is 403.
+     */
+    private Response readAnalysisForCaller(String graphID, String body) {
+        String caller = authenticatedUserId();
+        if (caller == null || caller.isEmpty()) {
+            throw new WebApplicationException(Response.Status.UNAUTHORIZED);
+        }
+        if (graphID == null) {
+            return Response.status(Response.Status.NOT_FOUND).build();
+        }
+        if (body != null) {
+            return Response.ok().entity(body).build();
+        }
+        String owner = new DBQuery().getGraphOwner(graphID);
+        if (owner == null || owner.trim().isEmpty()) {
+            return Response.status(Response.Status.NOT_FOUND).build();
+        }
+        return Response.status(Response.Status.FORBIDDEN).build();
+    }
+
+    private void requireGraphOwner(String graphId) {
+        String caller = authenticatedUserId();
+        if (caller == null || caller.isEmpty()) {
+            throw new WebApplicationException(Response.Status.UNAUTHORIZED);
+        }
+        String owner = new DBQuery().getGraphOwner(graphId);
+        if (owner == null || owner.trim().isEmpty()) {
+            throw new WebApplicationException(Response.Status.NOT_FOUND);
+        }
+        if (!owner.trim().equals(caller)) {
+            throw new WebApplicationException(Response.Status.FORBIDDEN);
+        }
+    }
+
+    private void requireNodeMutation(String json) {
+        requireGraphOwner(stringField(json, "graphID"));
+        String existingGraph = new DBQuery().graphIdOfNode(stringField(json, "nodeID"));
+        if (existingGraph != null) {
+            requireGraphOwner(existingGraph);
+        }
+    }
+
+    private void requireEdgeMutation(String json) {
+        requireGraphOwner(stringField(json, "graphID"));
+        String existingGraph = new DBQuery().graphIdOfEdge(stringField(json, "edgeID"));
+        if (existingGraph != null) {
+            requireGraphOwner(existingGraph);
+        }
+    }
+
+    private static boolean snapshotTargetsGraph(String analysis, String graphId) {
+        try {
+            return DBQuery.elementsTargetGraph(new JSONObject(analysis), graphId);
+        } catch (RuntimeException ex) {
+            return false;
+        }
+    }
+
+    private static String stringField(String json, String key) {
+        if (json == null) {
+            return null;
+        }
+        try {
+            JSONObject obj = new JSONObject(json);
+            if (!obj.has(key) || obj.isNull(key)) {
+                return null;
+            }
+            return obj.get(key).toString().trim();
+        } catch (RuntimeException ex) {
+            return null;
+        }
     }
 
 }
