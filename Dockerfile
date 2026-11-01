@@ -95,6 +95,26 @@ RUN sed -i 's:</Context>::g' /opt/cispaces/tools/tomcat/conf/context.xml \
     && cp /opt/cispaces/tools/tomcat/conf/context.xml /opt/cispaces/tools/tomcat/conf/context.xml.template \
     && grep -q '__CISPACES_DERBY_PASSWORD__' /opt/cispaces/tools/tomcat/conf/context.xml.template
 
+# Tomcat 8.0.48 enables an AJP/1.3 Connector on 8009 with no bind address and
+# no secret. Comment it out so nothing listens there. HTTP 8080 stays.
+RUN awk ' \
+    { \
+        if ($0 ~ /^[[:space:]]*<Connector port="8009" protocol="AJP\/1.3"/) { \
+            print "    <!-- AJP/1.3 disabled: Tomcat 8.0.48 would listen on 8009 with no secret. -->"; \
+            print "    <!--" $0 " -->"; \
+            found = 1; \
+            next; \
+        } \
+        print; \
+    } \
+    END { if (!found) exit 1 } \
+' /opt/cispaces/tools/tomcat/conf/server.xml > /tmp/server.xml \
+    && mv /tmp/server.xml /opt/cispaces/tools/tomcat/conf/server.xml \
+    && if grep -E '^[[:space:]]*<Connector[^>]*port="8009"' /opt/cispaces/tools/tomcat/conf/server.xml; then \
+         echo "AJP connector on 8009 is still enabled" >&2; \
+         exit 1; \
+       fi
+
 COPY docker-entrypoint.sh /opt/cispaces/docker-entrypoint.sh
 COPY DATABASE/create-cispaces-tables.sql /opt/cispaces/config/create-cispaces-tables.sql
 COPY --from=build /src/VC/target/VC.war /opt/cispaces/tools/tomcat/webapps/VC.war
