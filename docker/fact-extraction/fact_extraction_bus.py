@@ -26,7 +26,7 @@ import pika
 
 from extractor import apply_control_lexicon, load_nlp, message_kind, posts_from_payload
 from extractor import Lexicon
-from inbox import INBOX_DIR, poll_forever, publish_message
+from inbox import INBOX_DIR, claim_poller, poll_forever, publish_message
 from scenario import publish_scenario
 from store import FactStore
 
@@ -176,6 +176,19 @@ def consume(cfg, store, lexicon_box, nlp):
     signal.signal(signal.SIGINT, stop)
     with open(READY_PATH, "w", encoding="utf-8") as handle:
         handle.write("ready\n")
+    start_inbox(cfg)
+    log("fact-extraction consuming exchange %s inbox %s" % (exchange, INBOX_DIR))
+    try:
+        channel.start_consuming()
+    finally:
+        if connection.is_open:
+            connection.close()
+
+
+def start_inbox(cfg):
+    """Start the drop-folder loop once. consume() runs again after a broker error."""
+    if not claim_poller():
+        return
     inbox = threading.Thread(
         target=poll_forever,
         args=(cfg, publish_message),
@@ -183,12 +196,6 @@ def consume(cfg, store, lexicon_box, nlp):
         daemon=True,
     )
     inbox.start()
-    log("fact-extraction consuming exchange %s inbox %s" % (exchange, INBOX_DIR))
-    try:
-        channel.start_consuming()
-    finally:
-        if connection.is_open:
-            connection.close()
 
 
 def main():

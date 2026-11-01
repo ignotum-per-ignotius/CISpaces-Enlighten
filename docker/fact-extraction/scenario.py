@@ -63,18 +63,63 @@ def build_graph(rows):
 
 
 def publish_scenario(graph):
-    """Copy the graph into the workbench. Failure leaves the PostgreSQL copy in place."""
+    """Copy the graph into the workbench. Failure leaves the PostgreSQL copy in place.
+
+    Nodes and edges already stored for this analysis are removed when the new
+    graph does not include them, so a shorter re-ingest does not leave the
+    old facts on screen.
+    """
     client = _Workbench()
     try:
         client.login()
-        client.ensure_graph(graph["title"])
-        for node in graph["nodes"]:
+        existing = client.ensure_graph(graph["title"])
+        actions = sync_actions(existing, graph)
+        for node in actions["put_nodes"]:
             client.post_json("/VC/rest/node/%s" % node["nodeID"], node)
-        for edge in graph["edges"]:
+        for edge in actions["put_edges"]:
             client.post_json("/VC/rest/edge/%s" % edge["edgeID"], edge)
+        for edge_id in actions["delete_edges"]:
+            client.delete("/VC/rest/edge/%s" % edge_id)
+        for node_id in actions["delete_nodes"]:
+            client.delete("/VC/rest/node/%s" % node_id)
     except Exception as exc:
         return type(exc).__name__
     return "ok"
+
+
+def sync_actions(existing, graph):
+    """Edges go before nodes so a deleted fact does not leave a dangling link."""
+    drop_edges, drop_nodes = stale_ids(existing, graph)
+    return {
+        "put_nodes": list(graph["nodes"]),
+        "put_edges": list(graph["edges"]),
+        "delete_edges": drop_edges,
+        "delete_nodes": drop_nodes,
+    }
+
+
+def stale_ids(existing, graph):
+    existing = existing if isinstance(existing, dict) else {}
+    old_edges = _ids(existing.get("edges"), ("edgeID", "edgeid", "EDGEID"))
+    old_nodes = _ids(existing.get("nodes"), ("nodeID", "nodeid", "NODEID"))
+    new_edges = _ids(graph.get("edges"), ("edgeID",))
+    new_nodes = _ids(graph.get("nodes"), ("nodeID",))
+    return sorted(old_edges - new_edges), sorted(old_nodes - new_nodes)
+
+
+def _ids(records, keys):
+    found = set()
+    if not isinstance(records, list):
+        return found
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        for key in keys:
+            value = record.get(key)
+            if isinstance(value, str) and value.strip():
+                found.add(value.strip())
+                break
+    return found
 
 
 class _Workbench:
@@ -105,9 +150,15 @@ class _Workbench:
             raise RuntimeError("login missing user id")
 
     def ensure_graph(self, title):
-        status, _headers, _body = self._request("GET", "/VC/rest/analysis/%s" % GRAPH_ID)
-        if status == 200:
-            return
+        """Return the analysis already stored, or create it and return None."""
+        status, _headers, body = self._request("GET", "/VC/rest/analysis/%s" % GRAPH_ID)
+        if status == 200 and body:
+            try:
+                parsed = json.loads(body.decode("utf-8"))
+            except json.JSONDecodeError:
+                parsed = None
+            if isinstance(parsed, dict):
+                return parsed
         created, _headers, _body = self._request(
             "POST",
             "/VC/rest/new",
@@ -123,6 +174,14 @@ class _Workbench:
         )
         if created not in (200, 204):
             raise RuntimeError("graph status %s" % created)
+        return None
+
+    def delete(self, path):
+        status, _headers, body = self._request("DELETE", path)
+        if status >= 400:
+            raise RuntimeError("delete status %s" % status)
+        if body and body.strip().lower() == b"false":
+            raise RuntimeError("delete rejected")
 
     def post_json(self, path, payload):
         status, _headers, body = self._request("POST", path, payload)

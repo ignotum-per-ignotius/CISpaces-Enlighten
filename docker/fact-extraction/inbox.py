@@ -7,6 +7,7 @@ same way it treats a message FEWS or another adapter published.
 
 import json
 import os
+import threading
 import time
 from datetime import datetime, timezone
 
@@ -14,6 +15,19 @@ INBOX_DIR = os.environ.get("FACT_EXTRACTION_INBOX", "/var/fact-inbox")
 SEEN_PATH = "/tmp/fact-extraction.inbox"
 POLL_SECONDS = 2
 _SUFFIXES = (".txt", ".json")
+_POLL_LOCK = threading.Lock()
+_START_LOCK = threading.Lock()
+_poller_started = False
+
+
+def claim_poller():
+    """Return true only for the first caller. A reconnect must not start another loop."""
+    global _poller_started
+    with _START_LOCK:
+        if _poller_started:
+            return False
+        _poller_started = True
+        return True
 
 
 def message_from_file(name, raw):
@@ -48,31 +62,39 @@ def poll_forever(cfg, publish):
 
 
 def poll_once(cfg, publish):
-    seen = _load_seen()
-    try:
-        names = sorted(os.listdir(INBOX_DIR))
-    except FileNotFoundError:
-        return
-    for name in names:
-        if name.startswith(".") or name == "done":
-            continue
-        if not name.lower().endswith(_SUFFIXES):
-            continue
-        path = os.path.join(INBOX_DIR, name)
-        if not os.path.isfile(path):
-            continue
-        stamp = _stamp(path)
-        if seen.get(name) == stamp:
-            continue
-        with open(path, "rb") as handle:
-            raw = handle.read(20001)
-        body = message_from_file(name, raw)
-        if body is None:
+    """Publish each new file at most once, even if two loops call this together."""
+    with _POLL_LOCK:
+        seen = _load_seen()
+        try:
+            names = sorted(os.listdir(INBOX_DIR))
+        except FileNotFoundError:
+            return
+        for name in names:
+            if name.startswith(".") or name == "done":
+                continue
+            if not name.lower().endswith(_SUFFIXES):
+                continue
+            path = os.path.join(INBOX_DIR, name)
+            if not os.path.isfile(path):
+                continue
+            stamp = _stamp(path)
+            if seen.get(name) == stamp:
+                continue
+            with open(path, "rb") as handle:
+                raw = handle.read(20001)
+            body = message_from_file(name, raw)
+            if body is None:
+                _remember(seen, name, stamp)
+                continue
+            # Reserve the stamp before publish so the other loop cannot send it too.
             _remember(seen, name, stamp)
-            continue
-        publish(cfg, body)
-        _remember(seen, name, stamp)
-        _archive(path, name)
+            try:
+                publish(cfg, body)
+            except Exception:
+                seen.pop(name, None)
+                _write_seen(seen)
+                raise
+            _archive(path, name)
 
 
 def publish_message(cfg, body):
@@ -130,6 +152,10 @@ def _load_seen():
 
 def _remember(seen, name, stamp):
     seen[name] = stamp
+    _write_seen(seen)
+
+
+def _write_seen(seen):
     tmp = SEEN_PATH + ".tmp"
     with open(tmp, "w", encoding="utf-8") as handle:
         for key in sorted(seen):

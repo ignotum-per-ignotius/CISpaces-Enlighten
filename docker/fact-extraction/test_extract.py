@@ -1,6 +1,10 @@
 """Extractor checks that do not need PostgreSQL or RabbitMQ."""
 
 import json
+import os
+import tempfile
+import threading
+import time
 import unittest
 
 from extractor import (
@@ -189,6 +193,78 @@ class ExtractorTest(unittest.TestCase):
         self.assertIn("New York", body["text"])
         wrapped = json.loads(message_from_file("already.json", b'{"text":"The NYSE reported unrest."}'))
         self.assertEqual(wrapped["text"], "The NYSE reported unrest.")
+
+    def test_inbox_poller_claims_once_and_overlapping_polls_publish_once(self):
+        import inbox
+
+        inbox._poller_started = False
+        try:
+            self.assertTrue(inbox.claim_poller())
+            self.assertFalse(inbox.claim_poller())
+        finally:
+            inbox._poller_started = False
+
+        directory = tempfile.mkdtemp()
+        seen_path = os.path.join(directory, "seen")
+        with open(os.path.join(directory, "note.txt"), "w", encoding="utf-8") as handle:
+            handle.write("The NYSE reported unrest.")
+        old_dir, old_seen = inbox.INBOX_DIR, inbox.SEEN_PATH
+        inbox.INBOX_DIR = directory
+        inbox.SEEN_PATH = seen_path
+        calls = []
+        started = threading.Event()
+        release = threading.Event()
+
+        def publish(_cfg, _body):
+            calls.append(1)
+            started.set()
+            release.wait(3)
+
+        first = threading.Thread(target=inbox.poll_once, args=(None, publish))
+        second = threading.Thread(target=inbox.poll_once, args=(None, publish))
+        try:
+            first.start()
+            self.assertTrue(started.wait(3))
+            second.start()
+            time.sleep(0.2)
+            self.assertEqual(len(calls), 1)
+            release.set()
+            first.join(3)
+            second.join(3)
+        finally:
+            release.set()
+            first.join(3)
+            second.join(3)
+            inbox.INBOX_DIR = old_dir
+            inbox.SEEN_PATH = old_seen
+        self.assertEqual(len(calls), 1)
+
+    def test_shorter_graph_drops_old_nodes_and_edges(self):
+        from scenario import build_graph, sync_actions
+
+        first = self.extract("The NYSE made a deal with the mayor.")[0]
+        second = self.extract("The NYSE reported unrest.")[0]
+        full = build_graph([
+            ("cispaces:file:note.txt", "cispaces:file:note.txt#1", encode_triple(first)),
+            ("cispaces:file:note.txt", "cispaces:file:note.txt#2", encode_triple(second)),
+        ])
+        short = build_graph([
+            ("cispaces:file:note.txt", "cispaces:file:note.txt#1", encode_triple(second)),
+        ])
+        actions = sync_actions(json.loads(full["stored"]), short)
+        self.assertTrue(actions["delete_nodes"])
+        self.assertTrue(actions["delete_edges"])
+        deleted = set(actions["delete_nodes"])
+        kept = {node["nodeID"] for node in actions["put_nodes"]}
+        self.assertTrue(deleted.isdisjoint(kept))
+        removed_text = {
+            node["text"] for node in json.loads(full["stored"])["nodes"] if node["nodeID"] in deleted
+        }
+        self.assertTrue(any("deal" in text for text in removed_text))
+        self.assertNotIn(
+            next(node["nodeID"] for node in short["nodes"] if "unrest" in node["text"] or node["text"] == "reported"),
+            deleted,
+        )
 
     def test_encoded_roundtrip(self):
         triple = self.extract("The NYSE reported unrest.")[0]
