@@ -27,6 +27,17 @@ import org.json.simple.JSONObject;
 public class VControl {
 
     /**
+     * The workbench key is {@code islocked}. Null means the payload omitted it,
+     * so an update leaves the stored lock unchanged. A present value is stored.
+     */
+    private static Boolean lockedFlag(HashMap map) {
+        if (map == null || !map.containsKey("islocked") || map.get("islocked") == null) {
+            return null;
+        }
+        return Boolean.valueOf(Boolean.parseBoolean(map.get("islocked").toString()));
+    }
+
+    /**
      * @param map the hashmap which contains the keys from the JSON of an edge and their respective values
      * @return a hashmap with key: 'response' and value: 'success' if the data has been put into the db or 'fail' if some error occurred
      */
@@ -44,10 +55,8 @@ public class VControl {
             graphID = map.get("graphID").toString();
         }
 
-        boolean isLocked = false;
-        if(map.get("isLocked") != null){
-            Boolean.parseBoolean(map.get("isLocked").toString());
-        }
+        Boolean lockFlag = lockedFlag(map);
+        boolean isLocked = lockFlag != null && lockFlag.booleanValue();
 
         DBQuery dbQuery = new DBQuery();
         dbQuery.insertEdge(toID, fromID, formEdgeID, edgeID, graphID, isLocked);
@@ -119,10 +128,7 @@ public class VControl {
             graphID = map.get("graphID").toString();
         }
 
-        boolean isLocked = false;
-        if(map.get("isLocked") != null){
-            Boolean.parseBoolean(map.get("isLocked").toString());
-        }
+        Boolean isLocked = lockedFlag(map);
 
         DBQuery dbQuery = new DBQuery();
         dbQuery.insertNode(nodeID, source, uncert, eval, txt, input, timestamp, commit, type, annot, graphID, isLocked);

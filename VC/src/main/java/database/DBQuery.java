@@ -104,23 +104,32 @@ public class DBQuery {
 
     //queries to insert a node or update an existing node information in the database
     public void insertNode(String nodeID, String source, String uncert, String eval, String txt, String input,
-                           Timestamp timestamp, String commit, String type, String annot, String graphID, boolean isLocked)
+                           Timestamp timestamp, String commit, String type, String annot, String graphID, Boolean isLocked)
     {
         ArrayList<HashMap<String,Object>> rs = dbcn.executeQuery(
                 "SELECT nodeid FROM CISPACES_NODE WHERE nodeid = ?", nodeID);
         if(rs.isEmpty()){
             System.out.println("NODE DOESNT EXIST");
+            boolean locked = isLocked != null && isLocked.booleanValue();
             dbcn.executeUpdate(
                     "INSERT INTO CISPACES_NODE (nodeid, source, uncert, eval, txt, inp, dtg, cmt, type, annot, graphid, islocked) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     sqlString(nodeID), sqlString(source), sqlString(uncert), sqlString(eval), sqlString(txt),
                     sqlString(input), sqlTimestamp(timestamp), sqlString(commit), sqlString(type), sqlString(annot),
-                    sqlString(graphID), Boolean.valueOf(isLocked));
+                    sqlString(graphID), Boolean.valueOf(locked));
         }else{
             System.out.println("NODE EXISTS");
-            dbcn.executeUpdate(
-                    "UPDATE CISPACES_NODE SET uncert = ?, eval = ?, txt = ?, inp = ?, cmt = ?, annot = ? WHERE nodeid = ?",
-                    sqlString(uncert), sqlString(eval), sqlString(txt), sqlString(input), sqlString(commit),
-                    sqlString(annot), sqlString(nodeID));
+            // A missing flag must not clear a lock the client never sent.
+            if (isLocked != null) {
+                dbcn.executeUpdate(
+                        "UPDATE CISPACES_NODE SET uncert = ?, eval = ?, txt = ?, inp = ?, cmt = ?, annot = ?, islocked = ? WHERE nodeid = ?",
+                        sqlString(uncert), sqlString(eval), sqlString(txt), sqlString(input), sqlString(commit),
+                        sqlString(annot), Boolean.valueOf(isLocked.booleanValue()), sqlString(nodeID));
+            } else {
+                dbcn.executeUpdate(
+                        "UPDATE CISPACES_NODE SET uncert = ?, eval = ?, txt = ?, inp = ?, cmt = ?, annot = ? WHERE nodeid = ?",
+                        sqlString(uncert), sqlString(eval), sqlString(txt), sqlString(input), sqlString(commit),
+                        sqlString(annot), sqlString(nodeID));
+            }
         }
     }
 

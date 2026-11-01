@@ -80,7 +80,7 @@ app.WorkBoxView = Backbone.View
         formatter: function(value) {
           if (chart.nodes) {
             chart.nodes.forEach(function(d) {
-              $("#draw_" + d.nodeID + ' text').html(parseText(d.text, value));
+              $("#draw_" + d.nodeID + ' text').text(parseText(d.text, value));
             });
           }
           return value;
@@ -373,7 +373,8 @@ app.WorkBoxView = Backbone.View
         type: data['type'],
         nodeID: data['nodeID'],
         annot: data['annot'],
-        graphID: data['graphID']
+        graphID: data['graphID'],
+        islocked: data['islocked']
       };
 
       // creates model of the node in the collection and sends POST request to a back-end service

@@ -180,7 +180,7 @@ app.ToolBoxView = Backbone.View.extend({
   },
 
   importAnalysis: function() {
-    var analysis = document.getElementById('selectedAnalysis').innerHTML;
+    var analysis = $("#selectedAnalysis").text();
     if (analysis) {
       var json = JSON.parse(analysis);
       var object = {

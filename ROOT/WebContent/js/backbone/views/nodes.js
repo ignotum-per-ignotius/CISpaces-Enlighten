@@ -69,7 +69,7 @@ app.NodeView = Backbone.View.extend({
       });
 
       // updates text in the graph
-      $("#draw_" + nodeID + ' text').html(parseText(updated_text));
+      $("#draw_" + nodeID + ' text').text(parseText(updated_text));
       $("#draw_" + nodeID + ' rect title').text(updated_text);
 
       // updates text in the detail box
