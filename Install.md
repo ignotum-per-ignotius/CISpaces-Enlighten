@@ -10,6 +10,22 @@ https://maven.apache.org/download.cgi
 The services run under a Java web application server, and have been tested with Apache Tomcat 8.0.45 to 8.0.47
 http://tomcat.apache.org/download-80.cgi
 
+## Secrets
+
+CISpaces does not ship a JWT signing key or database passwords. Placeholders live only in `config/secrets.env.example` and `config/key.properties.example`. Those files are not loaded at runtime.
+
+Export these before `./install-prereqs.sh`, `./create-database.sh`, and `FEWS/extra/install-fact-extraction.sh`, and export the PostgreSQL and RabbitMQ values again in the shell that runs `./start-cispaces.sh` so Tomcat inherits them:
+
+- `CISPACES_DERBY_PASSWORD` — Derby user `gaiandb`. `install-prereqs.sh` writes it into Tomcat's `context.xml`. `create-database.sh` uses it for the ij connection.
+- `CISPACES_POSTGRES_PASSWORD` — PostgreSQL role `intelanalysis`. FEWS reads this when it connects. `install-fact-extraction.sh` sets the role password from it.
+- `CISPACES_RABBITMQ_PASSWORD` — RabbitMQ user `intelanalysis`. FEWS reads this when it connects. `install-fact-extraction.sh` sets the broker user from it.
+
+`install-prereqs.sh` generates one JWT key at `${CISPACES}/config/key.properties` (mode 600) and appends `CISPACES_JWT_KEY_FILE` to `~/.profile`. Every service reads that same file. `start-cispaces.sh` exports `CISPACES_JWT_KEY_FILE` when it is unset, defaulting to `${CISPACES}/config/key.properties`. Replace that file and restart to rotate the key. Do not commit it.
+
+Password hashes are PBKDF2-HMAC-SHA1 at 1400000 iterations, the current OWASP Password Storage Cheat Sheet floor for that algorithm. The algorithm is unchanged so an older hash still verifies. On a successful login, a hash stored with fewer iterations is rewritten at 1400000.
+
+Sample users Ella, Joe, and Miles (password `password` in `DATABASE/create-cispaces-tables.sql`) in a database created before this change still have 1000-iteration hashes. Re-seed from that SQL file or reset those passwords. A successful login rewrites an old hash; accounts that never log in keep the weaker hash until they are re-seeded or reset.
+
 ## Installation
 
 ### Ubuntu 16.04
@@ -67,7 +83,7 @@ $ <CTRL+A>,<D>
 ```
 
 - To use CISpaces web interface, point your web browser to http://YOUR_IP:8080
-- You can login with sample users 'Ella', 'Joe' or 'Miles' with password 'password'
+- You can login with sample users 'Ella', 'Joe' or 'Miles' with password 'password' on a database seeded from the current `DATABASE/create-cispaces-tables.sql`. An older database must be re-seeded or those passwords reset; logging in once also rewrites an old hash.
 
 - To stop:
 

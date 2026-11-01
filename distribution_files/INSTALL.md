@@ -28,7 +28,10 @@ $ sudo firewall-cmd --reload
 
 3. To use CISpaces web interface, point your Chrome web browser to http://YOUR_IP:8080
 
-You can login with sample users 'Ella', 'Joe' or 'Miles' with password 'password'
+You can login with sample users 'Ella', 'Joe' or 'Miles' with password 'password' after the database is seeded from the current SQL. An older database must be re-seeded or those passwords reset.
+
+Set `CISPACES_POSTGRES_PASSWORD` and `CISPACES_RABBITMQ_PASSWORD` in the environment before starting fact extraction. Derby's password is the one written into Tomcat `context.xml` at install (`CISPACES_DERBY_PASSWORD`). One shared JWT key file is `${CISPACES_JWT_KEY_FILE}`, which defaults to `config/key.properties` next to this install. See `config/secrets.env.example`. Do not commit real values.
+
 To stop:
 
 4. To stop cispaces:

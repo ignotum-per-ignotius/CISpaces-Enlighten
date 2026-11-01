@@ -10,6 +10,27 @@ fi
 
 start_dir=$(pwd)
 export JAVA_HOME=${start_dir}/fact-extraction/third-party/jdk1.8.0_151
+if [ -z "${CISPACES_JWT_KEY_FILE:-}" ]; then
+    export CISPACES_JWT_KEY_FILE="${start_dir}/config/key.properties"
+fi
+if [ ! -f "${CISPACES_JWT_KEY_FILE}" ]; then
+    set +x
+    mkdir -p "$(dirname "${CISPACES_JWT_KEY_FILE}")"
+    jwt_key=$(od -An -N64 -tx1 /dev/urandom | tr -d ' \n')
+    old_umask=$(umask)
+    umask 077
+    {
+        echo "# Shared by every CISpaces service. Generated at install. Do not commit."
+        printf 'keyString=%s\n' "$jwt_key"
+    } > "${CISPACES_JWT_KEY_FILE}"
+    umask "$old_umask"
+    unset jwt_key
+    chmod 600 "${CISPACES_JWT_KEY_FILE}"
+    echo "# Wrote the shared JWT key file"
+fi
+if [ -z "${CISPACES_POSTGRES_PASSWORD:-}" ] || [ -z "${CISPACES_RABBITMQ_PASSWORD:-}" ]; then
+    echo "# Export CISPACES_POSTGRES_PASSWORD and CISPACES_RABBITMQ_PASSWORD before starting fact extraction. See config/secrets.env.example."
+fi
 
 echo "### - Starting CISPaces "
 

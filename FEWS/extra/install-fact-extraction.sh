@@ -7,7 +7,43 @@ source ~/.profile
 SQL_USER="intelanalysis"
 SQL_DB_NAME="intelanalysis"
 SQL_SCHEMA_NAME="factextract"
-SQL_PASSWORD="passw0rd"
+
+# A traced shell must not print secret values.
+set +x
+
+require_env_secret() {
+    set +x
+    local name="$1"
+    local value="${!name-}"
+    if [ -z "$value" ]; then
+        echo "# Set ${name} in the environment before continuing. See config/secrets.env.example. The value is not printed."
+        exit 1
+    fi
+    case "$value" in
+        *\\*|*$'\n'*|*$'\r'*)
+            echo "# ${name} contains a backslash or newline, which this script cannot pass through safely. Choose another value. The value is not printed."
+            exit 1
+            ;;
+    esac
+}
+
+update_db_pass() {
+    set +x
+    local file="$1"
+    local tmp
+    tmp=$(mktemp)
+    chmod 600 "$tmp"
+    awk -v password="$CISPACES_POSTGRES_PASSWORD" '
+        BEGIN { found=0 }
+        /^db_pass=/ { print "db_pass=" password; found=1; next }
+        { print }
+        END { if (found == 0) print "db_pass=" password }
+    ' "$file" > "$tmp"
+    mv "$tmp" "$file"
+}
+
+require_env_secret CISPACES_POSTGRES_PASSWORD
+require_env_secret CISPACES_RABBITMQ_PASSWORD
 
 FACT_EXTRACTION_DIR=${CISPACES}/tools/fact-extraction
 FACT_EXTRACTION_REPO="https://github.com/CISpaces/factextraction.git"
@@ -57,7 +93,11 @@ sudo -u postgres psql -d ${SQL_DB_NAME} < FEWS/extra/create_vocab_tables.sql &&
     sudo -u postgres psql -d ${SQL_DB_NAME} < FEWS/extra/intelanalysis_factextract_vocab_topic.sql &&
     sudo -u postgres psql -d ${SQL_DB_NAME} < FEWS/extra/intelanalysis_factextract_vocab_keyword.sql &&
     sudo -u postgres psql -d ${SQL_DB_NAME} < ${FACT_EXTRACTION_DIR}/corpus/database-phase1/scenario-18-dec-2017.sql &&
-    echo "ALTER USER ${SQL_USER} WITH PASSWORD '${SQL_PASSWORD}';" | sudo -u postgres psql -d ${SQL_DB_NAME} &&
+    sudo -u postgres psql -d "${SQL_DB_NAME}" -v ON_ERROR_STOP=1 \
+        -v sqluser="${SQL_USER}" \
+        -v sqlpass="${CISPACES_POSTGRES_PASSWORD}" <<'SQL' &&
+ALTER USER :"sqluser" WITH PASSWORD :'sqlpass';
+SQL
     echo "GRANT ALL ON SCHEMA ${SQL_SCHEMA_NAME} TO ${SQL_USER};" | sudo -u postgres psql -d ${SQL_DB_NAME} &&
     echo "GRANT ALL ON ALL TABLES IN SCHEMA ${SQL_SCHEMA_NAME} TO ${SQL_USER};" | sudo -u postgres psql -d ${SQL_DB_NAME} &&
     echo "GRANT ALL ON ALL SEQUENCES IN SCHEMA ${SQL_SCHEMA_NAME} TO ${SQL_USER};" | sudo -u postgres psql -d ${SQL_DB_NAME}
@@ -77,7 +117,11 @@ if [ $? -eq 0 ]; then echo "[OK]"; else echo "[Failed]"; exit; fi
 
 echo "# - Modifying RabbitMQ config...(Y/n)"
 if [ "${yes}" != 'true' ]; then read stopgo; if [ "$stopgo" == "n" ]; then exit 0; fi; fi
-if [ "${existing}" != 'true' ]; then sudo rabbitmqctl add_user ${SQL_USER} ${SQL_PASSWORD}; fi
+if [ "${existing}" != 'true' ]; then
+    sudo rabbitmqctl add_user "${SQL_USER}" "${CISPACES_RABBITMQ_PASSWORD}"
+else
+    sudo rabbitmqctl change_password "${SQL_USER}" "${CISPACES_RABBITMQ_PASSWORD}"
+fi &&
 sudo rabbitmqctl set_user_tags ${SQL_USER} administrator &&
     sudo rabbitmqctl set_permissions ${SQL_USER} ".*" ".*" ".*"
 if [ $? -eq 0 ]; then echo "[OK]"; else echo "[Failed]"; exit; fi
@@ -128,7 +172,7 @@ sed -i "s:^stanford_tagger_dir=.*:stanford_tagger_dir=${FACT_EXTRACTION_DIR}/thi
     sed -i "s:^stanford_parser_dir=.*:stanford_parser_dir=${FACT_EXTRACTION_DIR}/third-party/stanford-parser-full-2016-10-31:g" ${CONFIG_FILE} &&
     sed -i "s:^model_jar=.*:model_jar=${FACT_EXTRACTION_DIR}/third-party/stanford-parser-full-2016-10-31/stanford-english-corenlp-2016-10-31-models.jar:g" ${CONFIG_FILE} &&
     sed -i "s:^db_user=.*:db_user=intelanalysis:g" ${FACT_EXTRACTION_DIR}/config/fact_extraction_app/fact_extraction_app.ini &&
-    sed -i "s:^db_pass=.*:db_pass=${SQL_PASSWORD}:g" ${FACT_EXTRACTION_DIR}/config/fact_extraction_app/fact_extraction_app.ini &&
+    update_db_pass "${FACT_EXTRACTION_DIR}/config/fact_extraction_app/fact_extraction_app.ini" &&
     sed -i "s:^unit_test_publish_vocab=.*:unit_test_publish_vocab=False:g" ${FACT_EXTRACTION_DIR}/config/fact_extraction_app/fact_extraction_app.ini &&
     sed -i "s:^input_file=.*:input_file=:g" ${FACT_EXTRACTION_DIR}/config/fact_extraction_app/fact_extraction_app.ini &&
     sed -i "s:/projects-git/intel-analysis-dstl/fact-extraction:${FACT_EXTRACTION_DIR}:g" ${CONFIG_FILE}

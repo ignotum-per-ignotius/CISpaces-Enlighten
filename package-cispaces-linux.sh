@@ -64,7 +64,13 @@ cp -a fact-extraction cispaces/
 echo "[OK]"
 
 echo
+echo "Copying secret examples (not live credentials)..."
+mkdir -p cispaces/config
+cp -a config/key.properties.example config/secrets.env.example cispaces/config/
+echo "[OK]"
+
+echo
 packagename="cispaces-linux-$(date '+%Y%m%d-%H%M%S').zip"
 echo "Creating archive ${packagename}..."
-zip --symlinks -qr ${packagename} cispaces/
+zip --symlinks -qr ${packagename} cispaces/ -x "cispaces/config/key.properties"
 if [ $? -eq 0 ]; then echo "[OK]"; else echo "[Failed]"; exit; fi

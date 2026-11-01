@@ -317,6 +317,17 @@ public class DBQuery {
     }//insertUser
 
     /**
+     * Replace the stored password hash for a username. Used when a successful
+     * login upgrades an older iteration count.
+     * @return true when the update ran
+     */
+    public boolean updatePasswordHash(String username, String passwordHash) {
+        return dbcn.executeUpdate(
+                "UPDATE CISPACES_USERS SET PASSWORD = ? WHERE USERNAME = ?",
+                passwordHash, username);
+    }
+
+    /**
      * Return metadata for analyses belonging to the supplied user
      * @param userID The user
      * @return The analyses as a JSON formatted string

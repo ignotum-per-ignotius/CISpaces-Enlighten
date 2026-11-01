@@ -1,0 +1,5 @@
+# Not loaded at runtime.
+# install-prereqs.sh writes one shared key to ${CISPACES}/config/key.properties
+# and every service reads that file. Set CISPACES_JWT_KEY_FILE if you move it.
+# Do not commit the generated file.
+keyString=generate-at-install

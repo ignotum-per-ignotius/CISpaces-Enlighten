@@ -26,6 +26,76 @@ while getopts 'yh' flag; do
     esac
 done
 
+# A traced shell must not print secret values.
+set +x
+
+require_env_secret() {
+    set +x
+    local name="$1"
+    local kind="$2"
+    local value="${!name-}"
+    if [ -z "$value" ]; then
+        echo "# Set ${name} in the environment before continuing. See config/secrets.env.example. The value is not printed."
+        exit 1
+    fi
+    case "$value" in
+        *\\*|*$'\n'*|*$'\r'*)
+            echo "# ${name} contains a backslash or newline, which this script cannot pass through safely. Choose another value. The value is not printed."
+            exit 1
+            ;;
+    esac
+    if [ "$kind" = "derby" ]; then
+        if [[ "$value" == *'$'* || "$value" == *";"* || "$value" == *"'"* || "$value" == *'`'* ]]; then
+            echo "# ${name} cannot contain a quote, backtick, semicolon, or dollar sign. Choose another value. The value is not printed."
+            exit 1
+        fi
+    fi
+}
+
+xml_escape() {
+    local s="$1"
+    s=${s//&/&amp;}
+    s=${s//</&lt;}
+    s=${s//>/&gt;}
+    s=${s//\"/&quot;}
+    s=${s//\'/&apos;}
+    printf '%s' "$s"
+}
+
+generate_shared_jwt_key() {
+    set +x
+    local key_file="${CISPACES}/config/key.properties"
+    if [ -f "$key_file" ]; then
+        echo "# Shared JWT key file already exists; leaving it in place"
+    else
+        mkdir -p "${CISPACES}/config"
+        local jwt_key
+        jwt_key=$(od -An -N64 -tx1 /dev/urandom | tr -d ' \n')
+        if [ "${#jwt_key}" -lt 32 ]; then
+            echo "# Failed to generate a JWT key"
+            unset jwt_key
+            exit 1
+        fi
+        local old_umask
+        old_umask=$(umask)
+        umask 077
+        {
+            echo "# Shared by every CISpaces service. Generated at install. Do not commit."
+            printf 'keyString=%s\n' "$jwt_key"
+        } > "$key_file"
+        umask "$old_umask"
+        unset jwt_key
+        chmod 600 "$key_file"
+        echo "# Wrote the shared JWT key file"
+    fi
+    local jwt_export="export CISPACES_JWT_KEY_FILE=${CISPACES}/config/key.properties"
+    if ! grep -qxF "$jwt_export" "${HOME}/.profile" 2>/dev/null; then
+        echo "$jwt_export" >> "${HOME}/.profile"
+    fi
+}
+
+require_env_secret CISPACES_DERBY_PASSWORD derby
+
 echo
 echo "### - Install CISPACES Prerequisites on Ubuntu 16.04...? (Y/n)" 
 if [ "${yes}" != 'true' ]; then read stopgo; if [ "$stopgo" == "n" ]; then exit 0; fi; fi
@@ -33,6 +103,7 @@ if [ "${yes}" != 'true' ]; then read stopgo; if [ "$stopgo" == "n" ]; then exit 
 echo "# - Updating environment..."
 echo "export CISPACES=${PWD}/cispaces" >> ~/.profile
 source ~/.profile
+export CISPACES="${PWD}/cispaces"
 
 echo "# - Install prerequisite OS packages [default-jdk-headless, wget, zip, screen, rabbitmq-server, maven]...? (Y/n)"
 if [ "${yes}" != 'true' ]; then read stopgo; if [ "$stopgo" == "n" ]; then exit 0; fi; fi
@@ -46,6 +117,7 @@ echo
 
 echo "# - Creating tools directory.."
 mkdir -p ${CISPACES}/tools/
+generate_shared_jwt_key
 cd ${CISPACES}/tools/
 echo
 
@@ -86,12 +158,13 @@ echo
 echo "# - Configure Tomcat...? (Y/n)"
 if [ "${yes}" != 'true' ]; then read stopgo; if [ "$stopgo" == "n" ]; then exit 0; fi; fi
 sed -i 's:</Context>::g' tomcat/conf/context.xml
-cat << 'EOF' >> ${CISPACES}/tools/tomcat/conf/context.xml
+derby_password_xml=$(xml_escape "$CISPACES_DERBY_PASSWORD")
+cat << EOF >> ${CISPACES}/tools/tomcat/conf/context.xml
 <Resource name="jdbc/myDB"
         auth="Container"
         type="javax.sql.DataSource"
         username="gaiandb"
-        password="passw0rd"
+        password="${derby_password_xml}"
         driverClassName="org.apache.derby.jdbc.ClientDriver"
         url="jdbc:derby://localhost:1527/gaiandb"
         maxTotal="10"
@@ -101,6 +174,7 @@ cat << 'EOF' >> ${CISPACES}/tools/tomcat/conf/context.xml
     />
 </Context>
 EOF
+unset derby_password_xml
 echo
 cd -
 

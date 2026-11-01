@@ -280,6 +280,7 @@ public class VCServlet {
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.TEXT_PLAIN)
     public Response checkUser(String userData){
+        // Do not log userData. The body contains the password.
         log.log(Level.INFO, "*** VERSION CONTROL SERVICE - Login Request ***");
         VCForkControl vcForkControl = new VCForkControl();
         String userInfo;
@@ -323,6 +324,7 @@ public class VCServlet {
             .setExpiration(toDate(LocalDateTime.now().plusHours(48)))
             .signWith(SignatureAlgorithm.HS512, key)
             .compact();
+    // Do not log jwtToken.
     log.info("#### issued token");
     return jwtToken;
 

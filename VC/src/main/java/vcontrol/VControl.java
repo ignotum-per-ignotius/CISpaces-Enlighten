@@ -27,6 +27,16 @@ import org.json.simple.JSONObject;
 
 public class VControl {
 
+    /**
+     * PBKDF2-HMAC-SHA1 iteration count. The OWASP Password Storage Cheat Sheet
+     * sets the legacy SHA-1 floor at 1400000. The algorithm stays SHA-1 so a
+     * stored hash, which does not name an algorithm, still verifies. A successful
+     * login rewrites a hash whose iteration count is below this floor.
+     */
+    public static final int PBKDF2_ITERATIONS = 1400000;
+
+    private static final String PBKDF2_ALGORITHM = "PBKDF2WithHmacSHA1";
+
     private final DBQuery dbQuery;
 
     public VControl() {
@@ -180,15 +190,15 @@ public class VControl {
      */
     public String onLoginUser(HashMap map) throws SQLException {
         String username = map.get("username").toString();
-        String suppliedPassword = map.get("password").toString();         
-        DBQuery dbQuery = new DBQuery();
+        String suppliedPassword = map.get("password").toString();
         JSONObject user = dbQuery.getUserByUsername(username);
         
         if(user != null){        
             boolean authenticated = false;
+            String storedHash = (String) user.get("password");
             try
             {
-                authenticated = validatePassword(suppliedPassword, (String) user.get("password"));
+                authenticated = validatePassword(suppliedPassword, storedHash);
             } catch (NoSuchAlgorithmException ex)
             {
                 Logger.getLogger(VControl.class.getName()).log(Level.SEVERE, null, ex);
@@ -197,6 +207,21 @@ public class VControl {
                 Logger.getLogger(VControl.class.getName()).log(Level.SEVERE, null, ex);
             }
             if(authenticated){
+                if (storedIterations(storedHash) < PBKDF2_ITERATIONS) {
+                    try {
+                        String upgraded = generateStrongPasswordHash(suppliedPassword);
+                        if (!dbQuery.updatePasswordHash(username, upgraded)) {
+                            Logger.getLogger(VControl.class.getName()).severe(
+                                    "Failed to store upgraded password hash");
+                        }
+                    } catch (NoSuchAlgorithmException ex) {
+                        Logger.getLogger(VControl.class.getName()).log(Level.SEVERE,
+                                "Failed to upgrade password hash", ex);
+                    } catch (InvalidKeySpecException ex) {
+                        Logger.getLogger(VControl.class.getName()).log(Level.SEVERE,
+                                "Failed to upgrade password hash", ex);
+                    }
+                }
                 user.remove("password");
                 return user.toJSONString();
             }
@@ -252,7 +277,6 @@ public class VControl {
             Logger.getLogger(VControl.class.getName()).log(Level.SEVERE, null, ex);
         }
         
-        DBQuery dbQuery = new DBQuery();        
         userId = dbQuery.insertUser(username, generatedSecuredPasswordHash, aff);
         return userId;
     }//onAddUser
@@ -266,12 +290,12 @@ public class VControl {
      */
     private static String generateStrongPasswordHash(String password) throws NoSuchAlgorithmException, InvalidKeySpecException
     {
-        int iterations = 1000;
+        int iterations = PBKDF2_ITERATIONS;
         char[] chars = password.toCharArray();
         byte[] salt = getSalt();
          
         PBEKeySpec spec = new PBEKeySpec(chars, salt, iterations, 64 * 8);
-        SecretKeyFactory skf = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA1");
+        SecretKeyFactory skf = SecretKeyFactory.getInstance(PBKDF2_ALGORITHM);
         byte[] hash = skf.generateSecret(spec).getEncoded();
         return iterations + ":" + toHex(salt) + ":" + toHex(hash);
     }
@@ -303,7 +327,7 @@ public class VControl {
         byte[] hash = fromHex(parts[2]);
          
         PBEKeySpec spec = new PBEKeySpec(suppliedPassword.toCharArray(), salt, iterations, hash.length * 8);
-        SecretKeyFactory skf = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA1");
+        SecretKeyFactory skf = SecretKeyFactory.getInstance(PBKDF2_ALGORITHM);
         byte[] testHash = skf.generateSecret(spec).getEncoded();
          
         int diff = hash.length ^ testHash.length;
@@ -312,6 +336,21 @@ public class VControl {
             diff |= hash[i] ^ testHash[i];
         }
         return diff == 0;
+    }
+
+    private static int storedIterations(String storedHash) {
+        if (storedHash == null) {
+            return -1;
+        }
+        int colon = storedHash.indexOf(':');
+        if (colon <= 0) {
+            return -1;
+        }
+        try {
+            return Integer.parseInt(storedHash.substring(0, colon));
+        } catch (NumberFormatException ex) {
+            return -1;
+        }
     }
     
     private static String toHex(byte[] array) throws NoSuchAlgorithmException {

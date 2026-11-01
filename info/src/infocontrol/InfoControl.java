@@ -48,13 +48,6 @@ public class InfoControl {
 		rand_gen=rgen;
 		jsh=new JsonHelper(true, false);
 		in=map;
-		/*
-		 *String dbURL = "jdbc:derby://localhost:6414/gaiandb";
-		String dbDriver = "org.apache.derby.jdbc.ClientDriver";
-		String dbUname ="gaiandb";
-		String dbPass = "passw0rd";
-		 */
-
 		dbcn=new DBConnect();
 		dbc=new DBQuery(dbcn);
 		user=new User();
