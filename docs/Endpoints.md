@@ -98,7 +98,7 @@ No vendor key is built into the source. A key is never written into the reposito
 
   `CISPACES_AI_BASE_URL`, when set, overrides the provider endpoint and the call is OpenAI-compatible `POST {CISPACES_AI_BASE_URL}/chat/completions`. When it is unset, the provider defaults are OpenAI `https://api.openai.com/v1/chat/completions`, Anthropic `https://api.anthropic.com/v1/messages`, and Google `https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent`. The key is sent as a header (`Authorization: Bearer`, `x-api-key`, or `x-goog-api-key`), not in the URL.
 
-  `CISPACES_AI_MODEL`, when set, overrides the model. Defaults are `gpt-4o`, `claude-sonnet-4-5`, and `gemini-2.5-flash`. A missing base URL or model with no provider default is also `503`. An upstream failure is `502`.
+  `CISPACES_AI_MODEL`, when set, overrides the model. Defaults are `gpt-4o`, `claude-sonnet-4-5`, and `gemini-2.5-flash`. A missing, unparseable, or non-http base URL, or a model with no provider default, is also `503`. An upstream failure is `502`.
 
   Environment variables:
 

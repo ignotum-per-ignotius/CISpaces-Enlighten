@@ -7,6 +7,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
@@ -25,6 +26,7 @@ public class LlmClient {
     public static final String ENV_MODEL = "CISPACES_AI_MODEL";
     public static final String ENV_API_KEY = "CISPACES_AI_API_KEY";
     public static final String MISSING_KEY_MESSAGE = "AI API key is not configured";
+    public static final String MISSING_BASE_URL_MESSAGE = "AI model base URL is not configured";
 
     private static final int MAX_RESPONSE_BYTES = 1024 * 1024;
     private static final Logger log = Logger.getLogger(LlmClient.class.getName());
@@ -78,8 +80,8 @@ public class LlmClient {
                     openaiBody(modelName, content)));
         }
         if (provider == null) {
-            log.warning("AI model base URL is not configured");
-            throw new NotConfiguredException("AI model base URL is not configured");
+            log.warning(MISSING_BASE_URL_MESSAGE);
+            throw new NotConfiguredException(MISSING_BASE_URL_MESSAGE);
         }
         String modelName = modelName(provider);
         if (ProviderKeyStore.ANTHROPIC.equals(provider)) {
@@ -289,16 +291,31 @@ public class LlmClient {
         return value == null || value.trim().isEmpty();
     }
 
+    /**
+     * A base URL the JDK cannot parse is a configuration error, same as a non-http scheme.
+     * The exception text can echo the URL, so it is not logged.
+     */
+    private static URL httpUrl(String url) {
+        URL target;
+        try {
+            target = new URL(url);
+        } catch (MalformedURLException e) {
+            log.warning(MISSING_BASE_URL_MESSAGE);
+            throw new NotConfiguredException(MISSING_BASE_URL_MESSAGE);
+        }
+        if (!"https".equalsIgnoreCase(target.getProtocol()) && !"http".equalsIgnoreCase(target.getProtocol())) {
+            log.warning("AI model base URL is not an http(s) URL");
+            throw new NotConfiguredException(MISSING_BASE_URL_MESSAGE);
+        }
+        return target;
+    }
+
     private static final class HttpExchange implements Exchange {
         @Override
         public String post(String url, Map<String, String> headers, byte[] body) {
             HttpURLConnection connection = null;
             try {
-                URL target = new URL(url);
-                if (!"https".equalsIgnoreCase(target.getProtocol()) && !"http".equalsIgnoreCase(target.getProtocol())) {
-                    log.warning("AI model base URL is not an http(s) URL");
-                    throw new NotConfiguredException("AI model base URL is not configured");
-                }
+                URL target = httpUrl(url);
                 connection = (HttpURLConnection) target.openConnection();
                 connection.setRequestMethod("POST");
                 connection.setConnectTimeout(10000);

@@ -36,6 +36,16 @@ public class AiResourceTest {
     }
 
     @Test
+    public void unparseableBaseUrlReturns503() {
+        AiResource resource = new AiResource(new LlmClient("not a url", "test-model", "test-key"));
+        Response response = resource.complete("{\"prompt\":\"hello\"}");
+
+        assertEquals(Response.Status.SERVICE_UNAVAILABLE.getStatusCode(), response.getStatus());
+        JSONObject body = new JSONObject(response.getEntity().toString());
+        assertEquals(LlmClient.MISSING_BASE_URL_MESSAGE, body.getString("error"));
+    }
+
+    @Test
     public void stubbedClientReturnsStubText() {
         AiResource resource = new AiResource(new LlmClient("https://example.invalid/v1", "test-model", "test-key") {
             @Override
