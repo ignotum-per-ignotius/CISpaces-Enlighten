@@ -15,11 +15,11 @@ from urllib.error import HTTPError, URLError
 DEST = Path(__file__).resolve().parent
 SOURCES = {
     "2018-fact-extraction-to-report-generation.pdf": [
-        "https://eprints.soton.ac.uk/425175/1/aFAIA305_0269_1_.pdf",
         "https://www.southampton.ac.uk/~sem03/comma-2018-final.pdf",
+        "https://eprints.soton.ac.uk/425175/1/aFAIA305_0269_1_.pdf",
     ],
     "2023-human-machine-collaboration-expert-evaluation.pdf": [
-        "https://eprints.soton.ac.uk/472703/2/1_s2.0_S2667305322000886_main.pdf",
+        "https://iris.unibs.it/retrieve/93e0e174-04c3-4168-ab30-56e6c7bf12ea/Human_Machine_Collaboration_in_Intelligence_Analysis.pdf",
     ],
 }
 
