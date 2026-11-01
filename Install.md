@@ -89,7 +89,7 @@ $ <CTRL+A>,<D>
 
 ```$ ./stop-cispaces.sh```
 
-The root Dockerfile builds this same workbench on Java 8 with Tomcat 8.0.48, Derby 10.12.1.1, and the same wars; start the container with `CISPACES_DERBY_PASSWORD` set so the entrypoint can write Tomcat `context.xml` at runtime.
+The root Dockerfile builds this same workbench on Java 8 with Tomcat 8.0.48, Derby 10.12.1.1, and the same wars; start the container with `CISPACES_DERBY_PASSWORD` set so the entrypoint can write Tomcat `context.xml` at runtime. From the repository root, `docker compose up` starts that workbench together with PostgreSQL, RabbitMQ, and the fact-extraction consumer; export `CISPACES_DERBY_PASSWORD`, `CISPACES_POSTGRES_PASSWORD`, and `CISPACES_RABBITMQ_PASSWORD` first.
 
 ## Third party software
 Cispaces has dependencies on a number of third party software libraries, none of
