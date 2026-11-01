@@ -27,19 +27,127 @@ require_env_secret() {
     esac
 }
 
+write_secret_file() {
+    set +x
+    local dest="$1"
+    local name="$2"
+    chmod 600 "$dest"
+    printf '%s' "${!name}" > "$dest"
+}
+
 update_db_pass() {
     set +x
     local file="$1"
-    local tmp
+    local tmp password_file
+    password_file=$(mktemp)
+    write_secret_file "$password_file" CISPACES_POSTGRES_PASSWORD
     tmp=$(mktemp)
     chmod 600 "$tmp"
-    awk -v password="$CISPACES_POSTGRES_PASSWORD" '
-        BEGIN { found=0 }
-        /^db_pass=/ { print "db_pass=" password; found=1; next }
+    # pwfile, not -v password, so the secret is not an awk argument.
+    if ! awk -v pwfile="$password_file" '
+        BEGIN {
+            getline password < pwfile
+            close(pwfile)
+            found = 0
+        }
+        /^db_pass=/ { print "db_pass=" password; found = 1; next }
         { print }
         END { if (found == 0) print "db_pass=" password }
-    ' "$file" > "$tmp"
-    mv "$tmp" "$file"
+    ' "$file" > "$tmp"; then
+        rm -f "$password_file" "$tmp"
+        return 1
+    fi
+    rm -f "$password_file"
+    # A cross-filesystem mv keeps the destination mode. Lock it after the move
+    # so later sed -i does not preserve a world-readable mode.
+    if ! mv "$tmp" "$file"; then
+        rm -f "$tmp"
+        return 1
+    fi
+    chmod 600 "$file"
+}
+
+set_postgres_role_password() {
+    set +x
+    local password_file sql_file
+    password_file=$(mktemp)
+    write_secret_file "$password_file" CISPACES_POSTGRES_PASSWORD
+    sql_file=$(mktemp)
+    chmod 600 "$sql_file"
+    awk -v pwfile="$password_file" -v role="$SQL_USER" '
+        BEGIN {
+            getline password < pwfile
+            close(pwfile)
+            escaped = ""
+            for (i = 1; i <= length(password); i++) {
+                c = substr(password, i, 1)
+                if (c == "\047") {
+                    escaped = escaped "\047\047"
+                } else {
+                    escaped = escaped c
+                }
+            }
+            printf "ALTER USER %s WITH PASSWORD \047%s\047;\n", role, escaped
+        }
+    ' > "$sql_file"
+    rm -f "$password_file"
+    # The password is in the mode-600 SQL file, passed on stdin, not in argv.
+    if ! sudo -u postgres psql -d "${SQL_DB_NAME}" -v ON_ERROR_STOP=1 -q < "$sql_file" >/dev/null 2>&1; then
+        rm -f "$sql_file"
+        echo "# Failed to set the PostgreSQL role password. The value is not printed."
+        return 1
+    fi
+    rm -f "$sql_file"
+}
+
+rabbitmq_set_password() {
+    set +x
+    local action="$1"
+    local password_file broker_file status expr fun
+    password_file=$(mktemp)
+    write_secret_file "$password_file" CISPACES_RABBITMQ_PASSWORD
+    if [ -d /var/lib/rabbitmq ]; then
+        broker_file=$(sudo mktemp -p /var/lib/rabbitmq cispaces-pw.XXXXXXXX) || {
+            rm -f "$password_file"
+            echo "# Could not create a RabbitMQ password file. The value is not printed."
+            return 1
+        }
+    else
+        broker_file=$(mktemp)
+        chmod 600 "$broker_file"
+    fi
+    case "$broker_file" in
+        *[!/A-Za-z0-9._-]*)
+            rm -f "$password_file"
+            sudo rm -f "$broker_file"
+            echo "# Could not store the RabbitMQ password for rabbitmqctl. The value is not printed."
+            return 1
+            ;;
+    esac
+    if ! sudo cp "$password_file" "$broker_file"; then
+        rm -f "$password_file"
+        sudo rm -f "$broker_file"
+        echo "# Could not store the RabbitMQ password for rabbitmqctl. The value is not printed."
+        return 1
+    fi
+    rm -f "$password_file"
+    if ! sudo chown rabbitmq:rabbitmq "$broker_file" || ! sudo chmod 600 "$broker_file"; then
+        sudo rm -f "$broker_file"
+        echo "# Could not hand the RabbitMQ password file to the rabbitmq user. The value is not printed."
+        return 1
+    fi
+    if [ "$action" = "add" ]; then
+        fun="add_user"
+    else
+        fun="change_password"
+    fi
+    # The broker reads the file. The sudo/rabbitmqctl command line does not
+    # contain the password, and eval prints ok rather than the password.
+    expr="{ok, PasswordBin} = file:read_file(\"${broker_file}\"), Password = binary_to_list(PasswordBin), code:ensure_loaded(rabbit_auth_backend_internal), case erlang:function_exported(rabbit_auth_backend_internal, ${fun}, 3) of true -> rabbit_auth_backend_internal:${fun}(<<\"${SQL_USER}\">>, Password, <<\"install-fact-extraction\">>); false -> rabbit_auth_backend_internal:${fun}(<<\"${SQL_USER}\">>, Password) end, ok."
+    sudo rabbitmqctl eval "$expr"
+    status=$?
+    sudo rm -f "$broker_file"
+    return "$status"
 }
 
 require_env_secret CISPACES_POSTGRES_PASSWORD
@@ -93,11 +201,7 @@ sudo -u postgres psql -d ${SQL_DB_NAME} < FEWS/extra/create_vocab_tables.sql &&
     sudo -u postgres psql -d ${SQL_DB_NAME} < FEWS/extra/intelanalysis_factextract_vocab_topic.sql &&
     sudo -u postgres psql -d ${SQL_DB_NAME} < FEWS/extra/intelanalysis_factextract_vocab_keyword.sql &&
     sudo -u postgres psql -d ${SQL_DB_NAME} < ${FACT_EXTRACTION_DIR}/corpus/database-phase1/scenario-18-dec-2017.sql &&
-    sudo -u postgres psql -d "${SQL_DB_NAME}" -v ON_ERROR_STOP=1 \
-        -v sqluser="${SQL_USER}" \
-        -v sqlpass="${CISPACES_POSTGRES_PASSWORD}" <<'SQL' &&
-ALTER USER :"sqluser" WITH PASSWORD :'sqlpass';
-SQL
+    set_postgres_role_password &&
     echo "GRANT ALL ON SCHEMA ${SQL_SCHEMA_NAME} TO ${SQL_USER};" | sudo -u postgres psql -d ${SQL_DB_NAME} &&
     echo "GRANT ALL ON ALL TABLES IN SCHEMA ${SQL_SCHEMA_NAME} TO ${SQL_USER};" | sudo -u postgres psql -d ${SQL_DB_NAME} &&
     echo "GRANT ALL ON ALL SEQUENCES IN SCHEMA ${SQL_SCHEMA_NAME} TO ${SQL_USER};" | sudo -u postgres psql -d ${SQL_DB_NAME}
@@ -118,9 +222,9 @@ if [ $? -eq 0 ]; then echo "[OK]"; else echo "[Failed]"; exit; fi
 echo "# - Modifying RabbitMQ config...(Y/n)"
 if [ "${yes}" != 'true' ]; then read stopgo; if [ "$stopgo" == "n" ]; then exit 0; fi; fi
 if [ "${existing}" != 'true' ]; then
-    sudo rabbitmqctl add_user "${SQL_USER}" "${CISPACES_RABBITMQ_PASSWORD}"
+    rabbitmq_set_password add
 else
-    sudo rabbitmqctl change_password "${SQL_USER}" "${CISPACES_RABBITMQ_PASSWORD}"
+    rabbitmq_set_password change
 fi &&
 sudo rabbitmqctl set_user_tags ${SQL_USER} administrator &&
     sudo rabbitmqctl set_permissions ${SQL_USER} ".*" ".*" ".*"
