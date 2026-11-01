@@ -39,6 +39,8 @@ import java.util.UUID;
 
 import com.google.gson.internal.LinkedTreeMap;
 
+import utils.JsonHelper;
+
 import plots.ProvServiceHelper;
  
 import visual.SGraph;
@@ -56,7 +58,7 @@ public class ProvServ {
 		 
 		 pvq=new ProvQuery();
 		 path=pt;
-		 jsh=new JsonHelper();
+		 jsh=new JsonHelper(true, false);
 		 psh=new ProvServiceHelper(port,host);
 	
 	}

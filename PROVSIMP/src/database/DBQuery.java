@@ -27,6 +27,7 @@ package database;
 
  
 
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
 
@@ -67,7 +68,7 @@ public class DBQuery {
 	String chain=null;
 	 
 	 ArrayList clobs=new ArrayList();
-	 ArrayList<HashMap<String,Object>> rs=dbcn.execSQL(sql);
+	 ArrayList<HashMap<String,Object>> rs=execSQLOrEmpty(sql);
 
 	 if(rs!=null && rs.size()>0){
 	 	HashMap<String, Object> res=rs.get(0);
@@ -80,7 +81,7 @@ public class DBQuery {
 				clobs.add(chain);
 				sql = "SELECT * FROM CISPACES_INFOPROV" +
 					      " WHERE nodeid = '" + chain + "'";
-				ArrayList<HashMap<String,Object>> rsc=dbcn.execSQL(sql);
+				ArrayList<HashMap<String,Object>> rsc=execSQLOrEmpty(sql);
 				//System.out.println(sql);
 				if(rsc!=null && rsc.size()>0){
 					HashMap<String, Object> rsce=rsc.get(0);
@@ -167,7 +168,7 @@ public class DBQuery {
 		//System.out.println(sql+ " ");
 		String model=null;
 		String chain=null;
-		ArrayList<HashMap<String,Object>> rs=dbcn.execSQL(sql);
+		ArrayList<HashMap<String,Object>> rs=execSQLOrEmpty(sql);
 
 		if(rs!=null && rs.size()>0){
 			HashMap<String, Object> res=rs.get(0);
@@ -180,7 +181,7 @@ public class DBQuery {
 				 
 					sql = "SELECT * FROM CISPACES_INFOPROV" +
 						      " WHERE nodeid = '" + chain + "' ";
-					ArrayList<HashMap<String,Object>> rsc=dbcn.execSQL(sql);
+					ArrayList<HashMap<String,Object>> rsc=execSQLOrEmpty(sql);
 
 					if(rsc!=null && rsc.size()>0){
 						HashMap<String, Object> rsce=rsc.get(0);
@@ -207,7 +208,7 @@ public class DBQuery {
 		sql = "SELECT * FROM CISPACES_BLACKLIST" +
 		      " WHERE name = '" + name + "'";
 		 ArrayList clobs=new ArrayList();
-		 ArrayList<HashMap<String,Object>> rs=dbcn.execSQL(sql);
+		 ArrayList<HashMap<String,Object>> rs=execSQLOrEmpty(sql);
 		 if(rs.isEmpty()){
 			 return false;
 		 }else{
@@ -233,7 +234,7 @@ public class DBQuery {
 			sql = "SELECT * FROM CISPACES_INFOPROV" +
 			      " WHERE nodeid = '" + nodeID + "'";
 			 ArrayList clobs=new ArrayList();
-			 ArrayList<HashMap<String,Object>> rs=dbcn.execSQL(sql);
+			 ArrayList<HashMap<String,Object>> rs=execSQLOrEmpty(sql);
 			 if(rs.isEmpty()){
 				 return false;
 			 }else{
@@ -245,6 +246,19 @@ public class DBQuery {
 	public void closeDataBase() {
 		dbcn.forceClose();
 		
+	}
+
+	/** A failed query is an empty list, so callers can use isEmpty() without a null check. */
+	protected ArrayList<HashMap<String,Object>> execSQLOrEmpty(String sql) {
+		try {
+			ArrayList<HashMap<String,Object>> rows = dbcn.execSQL(sql);
+			if (rows == null) {
+				return new ArrayList<HashMap<String,Object>>();
+			}
+			return rows;
+		} catch (SQLException failure) {
+			return new ArrayList<HashMap<String,Object>>();
+		}
 	}
 
  

@@ -61,7 +61,7 @@ public class INFInputServlet {
  
    public INFInputServlet() {
 	   log=Logger.getLogger(getClass().getName());
-	    jsh=new JsonHelper();
+	    jsh=new JsonHelper(true, false);
 	   org.apache.log4j.BasicConfigurator.configure();
 	   org.apache.log4j.Logger.getRootLogger().setLevel(org.apache.log4j.Level.OFF);
 	   Logger.getLogger("com.hp.hpl.jena.query").setLevel(Level.OFF);

@@ -38,7 +38,7 @@ public class Schemes {
 	
 	public Schemes(String jsc){
 		log=Logger.getLogger(getClass().getName());
-		jsh=new JsonHelper();
+		jsh=new JsonHelper(false, true);
 		scheme_str=jsc;
 		loadSchemes();
 		

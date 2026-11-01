@@ -36,7 +36,6 @@ import com.hp.hpl.jena.rdf.model.ModelExtract;
 import com.hp.hpl.jena.rdf.model.Resource;
 import com.hp.hpl.jena.rdf.model.StatementTripleBoundary;
 
-import gaian.DBConnect;
 import gaian.DBQuery;
 import gaian.JDBConnect;
 

@@ -19,5 +19,11 @@ echo "Rebuilding..."
 mvn install
 if [ $? -eq 0 ]; then 
 	echo "[OK]"
+else echo "[Failed]"; exit 1; fi
+
+echo "Deploying wars to Tomcat..."
+./deploy-to-tomcat.sh
+if [ $? -eq 0 ]; then 
+	echo "[OK]"
 	echo "You can now run ./start-cispaces.sh"
 else echo "[Failed]"; exit 1; fi

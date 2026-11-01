@@ -68,7 +68,7 @@ public class ERSControl {
 
 	public ERSControl(boolean PR, String scheme_str) {
 		 PRINT=PR;
-		 jsh=new JsonHelper();
+		 jsh=new JsonHelper(false, true);
 		 aspic=new ASPHelper(PRINT);
 		 ruler=new RuleChecker();
 		 nodes=new HashMap();
@@ -243,7 +243,7 @@ public class ERSControl {
 	
 	//testing method
 	private void convertInputToASKPAPI(HashMap input,HashMap colors,HashMap listh, HashMap ErsResponse) {
-		JsonHelper jsh=new JsonHelper();
+		JsonHelper jsh=new JsonHelper(false, true);
 		HashMap map= new HashMap();
 		map.put("map", nodes);
 		String first=jsh.convertInputJson(map);

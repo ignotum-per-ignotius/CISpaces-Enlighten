@@ -37,7 +37,11 @@ public class DBQuery {
     protected DBConnect dbcn;
 
     public DBQuery() {
-        dbcn = new DBConnect();
+        this(new DBConnect(DBConnect.ColumnValues.TEXT, true));
+    }
+
+    public DBQuery(DBConnect dbcn) {
+        this.dbcn = dbcn;
     }
 
     /*
@@ -104,7 +108,7 @@ public class DBQuery {
     }
 
     //queries to insert a node or update an existing node information in the database
-    public void insertNode(String nodeID, String source, String uncert, String eval, String txt, String input,
+    public boolean insertNode(String nodeID, String source, String uncert, String eval, String txt, String input,
                            Timestamp timestamp, String commit, String type, String annot, String graphID, Boolean isLocked)
             throws SQLException
     {
@@ -113,26 +117,24 @@ public class DBQuery {
         if(rs.isEmpty()){
             System.out.println("NODE DOESNT EXIST");
             boolean locked = isLocked != null && isLocked.booleanValue();
-            dbcn.executeUpdate(
+            return dbcn.executeUpdate(
                     "INSERT INTO CISPACES_NODE (nodeid, source, uncert, eval, txt, inp, dtg, cmt, type, annot, graphid, islocked) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     sqlString(nodeID), sqlString(source), sqlString(uncert), sqlString(eval), sqlString(txt),
                     sqlString(input), sqlTimestamp(timestamp), sqlString(commit), sqlString(type), sqlString(annot),
                     sqlString(graphID), Boolean.valueOf(locked));
-        }else{
-            System.out.println("NODE EXISTS");
-            // A missing flag must not clear a lock the client never sent.
-            if (isLocked != null) {
-                dbcn.executeUpdate(
-                        "UPDATE CISPACES_NODE SET uncert = ?, eval = ?, txt = ?, inp = ?, cmt = ?, annot = ?, islocked = ? WHERE nodeid = ?",
-                        sqlString(uncert), sqlString(eval), sqlString(txt), sqlString(input), sqlString(commit),
-                        sqlString(annot), Boolean.valueOf(isLocked.booleanValue()), sqlString(nodeID));
-            } else {
-                dbcn.executeUpdate(
-                        "UPDATE CISPACES_NODE SET uncert = ?, eval = ?, txt = ?, inp = ?, cmt = ?, annot = ? WHERE nodeid = ?",
-                        sqlString(uncert), sqlString(eval), sqlString(txt), sqlString(input), sqlString(commit),
-                        sqlString(annot), sqlString(nodeID));
-            }
         }
+        System.out.println("NODE EXISTS");
+        // A missing flag must not clear a lock the client never sent.
+        if (isLocked != null) {
+            return dbcn.executeUpdate(
+                    "UPDATE CISPACES_NODE SET uncert = ?, eval = ?, txt = ?, inp = ?, cmt = ?, annot = ?, islocked = ? WHERE nodeid = ?",
+                    sqlString(uncert), sqlString(eval), sqlString(txt), sqlString(input), sqlString(commit),
+                    sqlString(annot), Boolean.valueOf(isLocked.booleanValue()), sqlString(nodeID));
+        }
+        return dbcn.executeUpdate(
+                "UPDATE CISPACES_NODE SET uncert = ?, eval = ?, txt = ?, inp = ?, cmt = ?, annot = ? WHERE nodeid = ?",
+                sqlString(uncert), sqlString(eval), sqlString(txt), sqlString(input), sqlString(commit),
+                sqlString(annot), sqlString(nodeID));
     }
 
     //insert a node in the history table or update the information if it exists
@@ -159,16 +161,17 @@ public class DBQuery {
     }
 
     //insert an edge into the database - edges are never updated!
-    public void insertEdge(String toID, String fromID, String formEdgeID, String edgeID, String graphID, boolean isLocked) throws SQLException {
+    public boolean insertEdge(String toID, String fromID, String formEdgeID, String edgeID, String graphID, boolean isLocked) throws SQLException {
         ArrayList<HashMap<String,Object>> rs = dbcn.executeQuery(
                 "SELECT edgeid FROM CISPACES_EDGE WHERE edgeid = ?", edgeID);
         if(rs.isEmpty()) {
             System.out.println("EDGE DOESNT EXIST");
-            dbcn.executeUpdate(
+            return dbcn.executeUpdate(
                     "INSERT INTO CISPACES_EDGE (edgeID, target, source, formEdgeID, graphID, islocked) VALUES (?, ?, ?, ?, ?, ?)",
                     sqlString(edgeID), sqlString(toID), sqlString(fromID), sqlString(formEdgeID),
                     sqlString(graphID), Boolean.valueOf(isLocked));
         }
+        return true;
     }
 
     //populate the edge history table
@@ -526,35 +529,22 @@ public class DBQuery {
             while (entryIterator.hasNext()) {
                 //Each property of the node or edge
                 Map.Entry pair = (Map.Entry)entryIterator.next();
+                //these are reserved words in derby!!!
+                if(pair.getKey() != null && pair.getKey().toString().equals("annot")){
+                    // Missing, "N/A", and "{}" mean there are no annotations.
+                    // Anything that is not key=value is skipped instead of throwing.
+                    JSONObject joAnnots = annotationsFrom(pair.getValue());
+                    if(joAnnots != null && !joAnnots.isEmpty()) {
+                        obj.put("annot", joAnnots);
+                    }
+                    continue;
+                }
                 if (pair.getValue() == null) {
                     obj.put(pair.getKey(), null);
                     continue;
                 }
-                //these are reserved words in derby!!!                    
-                if(pair.getKey().toString().equals("annot")){                        
-                    // Expand the annot and set as a JSONArray                        
-                    String annotString = pair.getValue().toString();
-                    if(annotString.equals("{}")) continue; //don't care
-                    annotString = annotString.replaceAll("\\{", "");
-                    annotString = annotString.replaceAll("\\}", "");
-                    String[] annotations = annotString.split(",");
-                    //JSONArray jaAnnots = new JSONArray();
-                    JSONObject joAnnots = new JSONObject();
-                    for(String annotation : annotations) {
-                        //Split into k,v
-                        String[] annotParts = annotation.split("=");
-                        String annotKey = annotParts[0];
-                        String annotValue = annotParts[1];
-                        //JSONObject joAnnot = new JSONObject();
-                        joAnnots.put(annotKey, annotValue);
-                        //jaAnnots.add(joAnnot);                           
-                    }
-                    //joAnnots.put("annot", jaAnnots);
-                    //jsonArray.add(joAnnots);
-                    obj.put("annot", joAnnots);
-                } else {                    
-                    //not an annot
-                    if(pair.getKey().toString().equals("dtg")){
+                //not an annot
+                if(pair.getKey().toString().equals("dtg")){
                         // Abuse of the Derby Timestamp field elsewhere can result in dates being stored as strings which are
                         // unparsable by getTimestamp().  So, getString() is used in in DBConnect.convertResultSetToList()
                         // The output can have a trailing .0 which ERS is not expecting and complains. Loudly.
@@ -578,13 +568,39 @@ public class DBQuery {
                         obj.put("graphID", pair.getValue().toString());                                  
                     }else {
                         obj.put(pair.getKey(), pair.getValue().toString());
-                    }                    
-                }//else                
+                    }
             }//while each node property
             jsonArray.add(obj);
         }//for each node 
 
         return jsonArray;
+    }
+
+    /**
+     * Turn a stored annot cell into a JSON object of key=value pairs.
+     * A missing value, {@code N/A}, and {@code {}} are no annotations.
+     * A token without {@code =} is ignored.
+     */
+    static JSONObject annotationsFrom(Object raw) {
+        JSONObject joAnnots = new JSONObject();
+        if(raw == null) {
+            return joAnnots;
+        }
+        String annotString = raw.toString().trim();
+        if(annotString.isEmpty() || annotString.equals("{}") || annotString.equals("N/A")) {
+            return joAnnots;
+        }
+        annotString = annotString.replaceAll("\\{", "");
+        annotString = annotString.replaceAll("\\}", "");
+        String[] annotations = annotString.split(",");
+        for(String annotation : annotations) {
+            String[] annotParts = annotation.split("=");
+            if(annotParts.length < 2) {
+                continue;
+            }
+            joAnnots.put(annotParts[0], annotParts[1]);
+        }
+        return joAnnots;
     }
 
         //constructs a json object containing all saved variations of an analysis and returns it in a json string format

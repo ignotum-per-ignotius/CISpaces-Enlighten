@@ -25,7 +25,7 @@ import java.util.logging.Logger;
 
 import com.google.gson.internal.LinkedTreeMap;
 
-import provservice.JsonHelper;
+import utils.JsonHelper;
 import provservice.ProvServ;
 
 public class ProvControl {
@@ -43,7 +43,7 @@ public class ProvControl {
 
 	public String getProv(String json) {
 		//System.out.println("hey"+json);
-		JsonHelper jsh=new JsonHelper();
+		JsonHelper jsh=new JsonHelper(true, false);
 		HashMap map=jsh.convertInputMap(json); //from JSON String to map
 		String request=(String) map.get("request");
 		
