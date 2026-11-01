@@ -69,6 +69,65 @@ if [ -f "$context_xml" ] && grep -q '__CISPACES_DERBY_PASSWORD__' "$context_xml"
         unset password_file
     fi
 fi
+apply_fact_extraction_db_pass() {
+    set +x
+    local root="$1"
+    local ini ini_mode password_file ini_tmp warned
+    warned=0
+    if [ ! -d "$root" ]; then
+        return 0
+    fi
+    while IFS= read -r ini; do
+        if [ ! -f "$ini" ] || ! grep -q '__CISPACES_POSTGRES_PASSWORD__' "$ini"; then
+            continue
+        fi
+        if [ -z "${CISPACES_POSTGRES_PASSWORD:-}" ]; then
+            if [ "$warned" -eq 0 ]; then
+                echo "# Export CISPACES_POSTGRES_PASSWORD before starting. fact_extraction_app.ini still has the PostgreSQL placeholder. The value is not printed."
+                warned=1
+            fi
+            continue
+        fi
+        case "${CISPACES_POSTGRES_PASSWORD}" in
+            *$'\n'*|*$'\r'*)
+                if [ "$warned" -eq 0 ]; then
+                    echo "# CISPACES_POSTGRES_PASSWORD contains a newline. fact_extraction_app.ini was left unchanged. The value is not printed."
+                    warned=1
+                fi
+                continue
+                ;;
+        esac
+        password_file=$(mktemp)
+        chmod 600 "$password_file"
+        printf '%s' "$CISPACES_POSTGRES_PASSWORD" > "$password_file"
+        ini_mode=$(stat -c %a "$ini")
+        ini_tmp=$(mktemp)
+        chmod 600 "$ini_tmp"
+        # Build the line in a prefix that is not scanned again, so a value
+        # containing the placeholder stays literal.
+        awk -v sentinel="__CISPACES_POSTGRES_PASSWORD__" -v pwfile="$password_file" '
+            BEGIN {
+                getline password < pwfile
+                close(pwfile)
+            }
+            {
+                rest = $0
+                prefix = ""
+                slen = length(sentinel)
+                while ((i = index(rest, sentinel)) > 0) {
+                    prefix = prefix substr(rest, 1, i - 1) password
+                    rest = substr(rest, i + slen)
+                }
+                print prefix rest
+            }
+        ' "$ini" > "$ini_tmp"
+        mv "$ini_tmp" "$ini"
+        chmod "$ini_mode" "$ini"
+        rm -f "$password_file"
+        unset password_file
+    done < <(find "$root" -type f -name fact_extraction_app.ini 2>/dev/null)
+}
+apply_fact_extraction_db_pass "$start_dir"
 
 echo "### - Starting CISPaces "
 

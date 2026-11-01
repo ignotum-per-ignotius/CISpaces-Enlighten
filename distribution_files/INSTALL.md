@@ -30,7 +30,7 @@ $ sudo firewall-cmd --reload
 
 You can login with sample users 'Ella', 'Joe' or 'Miles' with password 'password' after the database is seeded from the current SQL. An older database must be re-seeded or those passwords reset.
 
-Set `CISPACES_POSTGRES_PASSWORD` and `CISPACES_RABBITMQ_PASSWORD` in the environment before starting fact extraction. The distribution archive does not include the Derby password: `context.xml` has the placeholder `__CISPACES_DERBY_PASSWORD__`, and `start-cispaces.sh` replaces it from `CISPACES_DERBY_PASSWORD` without printing the value. One shared JWT key file is `${CISPACES_JWT_KEY_FILE}`, which defaults to `config/key.properties` next to this install. See `config/secrets.env.example`. Do not commit real values.
+Set `CISPACES_POSTGRES_PASSWORD` and `CISPACES_RABBITMQ_PASSWORD` in the environment before starting fact extraction. The distribution archive does not include database passwords. Tomcat `context.xml` has the placeholder `__CISPACES_DERBY_PASSWORD__`, and `fact_extraction_app.ini` has `db_pass=__CISPACES_POSTGRES_PASSWORD__`. `start-cispaces.sh` replaces both from the environment without printing the values. One shared JWT key file is `${CISPACES_JWT_KEY_FILE}`, which defaults to `config/key.properties` next to this install. See `config/secrets.env.example`. Do not commit real values.
 
 To stop:
 
