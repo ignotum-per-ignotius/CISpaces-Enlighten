@@ -199,7 +199,8 @@ def start_inbox(cfg):
 
 
 def main():
-    log("fact-extraction loading %s" % "en_core_web_sm")
+    engine = os.environ.get("CISPACES_FACT_ENGINE", "spacy").strip().lower() or "spacy"
+    log("fact-extraction loading %s" % engine)
     cfg = read_config()
     for section, key in (
         ("situation-assessment", "db_pass"),

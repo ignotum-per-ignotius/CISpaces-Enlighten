@@ -1,19 +1,19 @@
-"""Small English fact extractor for the CISpaces phase-1 tables.
+"""Fact extractor for the CISpaces phase-1 tables.
 
-This is a replacement for the 2017 Southampton pipeline, not a port of it.
-Sentence breaks, part-of-speech tags, entity labels, and a subject-relation-object
-triple come from spaCy's small English model. Vocabulary control messages use
-the same JSON shape FEWS publishes on ``cispaces_exchange``.
+``CISPACES_FACT_ENGINE=stanford`` runs the 2016-10-31 Stanford tagger
+(CoreNLP 3.7.0) and the original ReVerb patterns. See ``stanford_engine``.
+The spaCy model remains the stand-in used when that variable is unset.
+It is not the 2017 pipeline. Vocabulary control messages use the same JSON
+shape FEWS publishes on ``cispaces_exchange``.
 """
 
 import hashlib
 import json
+import os
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
-
-import spacy
 
 MODEL_NAME = "en_core_web_sm"
 ENCODED_VERSION = 1
@@ -69,7 +69,12 @@ class Post:
 def load_nlp():
     global _NLP
     if _NLP is None:
-        _NLP = spacy.load(MODEL_NAME)
+        if os.environ.get("CISPACES_FACT_ENGINE", "").strip().lower() == "stanford":
+            from stanford_engine import StanfordOpenIE
+            _NLP = StanfordOpenIE.from_env()
+        else:
+            import spacy
+            _NLP = spacy.load(MODEL_NAME)
     return _NLP
 
 
@@ -174,6 +179,8 @@ def posts_from_payload(payload):
 
 
 def extract_text(nlp, text):
+    if hasattr(nlp, "extract_triples"):
+        return nlp.extract_triples(text)
     text = (text or "").strip()
     if not text:
         return []
