@@ -16,6 +16,7 @@ import java.security.SecureRandom;
 import java.security.spec.InvalidKeySpecException;
 import utils.TimeHelper;
 
+import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.util.HashMap;
 import java.util.logging.Level;
@@ -41,7 +42,7 @@ public class VControl {
      * @param map the hashmap which contains the keys from the JSON of an edge and their respective values
      * @return a hashmap with key: 'response' and value: 'success' if the data has been put into the db or 'fail' if some error occurred
      */
-    public HashMap onAddEdges(HashMap map) {
+    public HashMap onAddEdges(HashMap map) throws SQLException {
 
         String toID = map.get("target").toString();
         String fromID = map.get("source").toString();
@@ -72,7 +73,7 @@ public class VControl {
      * @return a hashmap with key: 'response' and value: 'success' if the data has been put into the db or 'fail' if some error occurred
      * Note that the nodes have varying number of keys in the JSON, thus they are checked for null.
      */
-    public HashMap onAddNodes(HashMap map) {
+    public HashMap onAddNodes(HashMap map) throws SQLException {
         TimeHelper timeHelper = new TimeHelper();
 
         String nodeID = map.get("nodeID").toString();
@@ -169,7 +170,7 @@ public class VControl {
      * @return a JSON string representing the authenticated user, or null if not
      * authenitcated
      */
-    public String onLoginUser(HashMap map) {
+    public String onLoginUser(HashMap map) throws SQLException {
         String username = map.get("username").toString();
         String suppliedPassword = map.get("password").toString();         
         DBQuery dbQuery = new DBQuery();
@@ -200,7 +201,7 @@ public class VControl {
      * @param map the hashmap which contains a graph id, the id of the creator of the analysis and a title for the analysis
      * @return a string indicating whether the analysis has been saved successfully
      */
-    public String onSaveAnalysis(HashMap map) {
+    public String onSaveAnalysis(HashMap map) throws SQLException {
         String graphID = map.get("graphID").toString();
         String title = null;
         String description = null;
@@ -223,7 +224,7 @@ public class VControl {
      * @param map
      * @return 
      */    
-    public String onAddUser(HashMap map) {
+    public String onAddUser(HashMap map) throws SQLException {
         String userId = null;
         String username = map.get("username").toString();
         String password = map.get("password").toString();

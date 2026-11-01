@@ -62,7 +62,7 @@ public class LockFlagTest {
     }
 
     @Test
-    public void clientLockFlagIsStoredOnNodesAndEdges() {
+    public void clientLockFlagIsStoredOnNodesAndEdges() throws Exception {
         VCForkControl control = new VCForkControl();
         control.evalJSONNode(nodeJson("node-locked", "true"));
         control.evalJSONNode(nodeJson("node-open", "false"));
@@ -76,7 +76,7 @@ public class LockFlagTest {
     }
 
     @Test
-    public void updatingANodePersistsTheClientLockFlag() {
+    public void updatingANodePersistsTheClientLockFlag() throws Exception {
         VCForkControl control = new VCForkControl();
         control.evalJSONNode(nodeJson("node-relock", "false"));
         assertFalse(storedLock("CISPACES_NODE", "nodeid", "node-relock"));
@@ -86,7 +86,7 @@ public class LockFlagTest {
     }
 
     @Test
-    public void updateWithoutFlagLeavesLockAndExplicitFalseClearsIt() {
+    public void updateWithoutFlagLeavesLockAndExplicitFalseClearsIt() throws Exception {
         VCForkControl control = new VCForkControl();
         control.evalJSONNode(nodeJson("node-keep", "true"));
         assertTrue(storedLock("CISPACES_NODE", "nodeid", "node-keep"));
@@ -101,7 +101,7 @@ public class LockFlagTest {
     }
 
     @Test
-    public void camelCaseKeyIsIgnored() {
+    public void camelCaseKeyIsIgnored() throws Exception {
         VCForkControl control = new VCForkControl();
         String json = nodeJson("node-camel", "false").replace(
                 "\"islocked\":\"false\"", "\"isLocked\":\"true\"");
@@ -151,7 +151,7 @@ public class LockFlagTest {
                 + "}";
     }
 
-    private static String storedText(String nodeId) {
+    private static String storedText(String nodeId) throws SQLException {
         ArrayList<HashMap<String, Object>> rows = new DBConnect().execSQL(
                 "SELECT txt FROM CISPACES_NODE WHERE nodeid = '" + nodeId + "'");
         assertNotNull(rows);
@@ -159,7 +159,7 @@ public class LockFlagTest {
         return String.valueOf(rows.get(0).get("txt"));
     }
 
-    private static boolean storedLock(String table, String idColumn, String id) {
+    private static boolean storedLock(String table, String idColumn, String id) throws SQLException {
         ArrayList<HashMap<String, Object>> rows = new DBConnect().execSQL(
                 "SELECT islocked FROM " + table + " WHERE " + idColumn + " = '" + id + "'");
         assertNotNull(table + " " + id, rows);

@@ -11,6 +11,7 @@ import database.DBQuery;
 import utils.JsonHelper;
 import vcontrol.VControl;
 
+import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -33,7 +34,7 @@ public class VCForkControl {
      * @param jsonInput the json for an edge coming from the front-end
      * @return a string which indicates whether the conversion to hashmap has succeeded
      */
-    public String evalJSONEdge(String jsonInput) {
+    public String evalJSONEdge(String jsonInput) throws SQLException {
         log.log(Level.INFO, "*** VERSION CONTROL SERVICE - SPLIT JSON EDGE***");
 
         jsonInput = jsonInput.replaceAll("\"\"", "null");
@@ -50,7 +51,7 @@ public class VCForkControl {
      * @param jsonInput the json for a node coming from the front-end
      * @return a string which indicates whether the conversion to hashmap has succeeded
      */
-    public String evalJSONNode(String jsonInput) {
+    public String evalJSONNode(String jsonInput) throws SQLException {
         log.log(Level.INFO, "*** VERSION CONTROL SERVICE - SPLIT JSON NODE");
 
         jsonInput = jsonInput.replaceAll("\"\"", "null");
@@ -84,7 +85,7 @@ public class VCForkControl {
      * @param credentials the user credentials in a json string format
      * @return a string indicating whether the user has been validated successfully
      */
-    public String evalJSONLoginUser(String credentials) {
+    public String evalJSONLoginUser(String credentials) throws SQLException {
 
         credentials = credentials.replaceAll("\"\"", "null");
         HashMap map = jsh.convertInputMap(credentials);
@@ -94,7 +95,7 @@ public class VCForkControl {
     }
     
    
-    public String evalJSONAddUser(String userData) {
+    public String evalJSONAddUser(String userData) throws SQLException {
         userData = userData.replaceAll("\"\"", "null");
         HashMap map = jsh.convertInputMap(userData);
         VControl vc = new VControl();
@@ -106,7 +107,7 @@ public class VCForkControl {
      * @param graphIDTitleJSON a json containing the information of a graph which will be saved into the database
      * @return a string indicating whether the graph has been saved successfully
      */
-    public String evalJSONSaveAnalysis(String graphIDTitleJSON) {
+    public String evalJSONSaveAnalysis(String graphIDTitleJSON) throws SQLException {
         log.log(Level.INFO, "*** VERSION CONTROL SERVICE - SPLIT JSON ON SAVE ANALYSIS");
         graphIDTitleJSON = graphIDTitleJSON.replaceAll("\"\"", "null");
         HashMap map = jsh.convertInputMap(graphIDTitleJSON);

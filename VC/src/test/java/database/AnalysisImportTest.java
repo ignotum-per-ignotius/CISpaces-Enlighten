@@ -235,7 +235,7 @@ public class AnalysisImportTest {
         assertNull(JwtSubjects.userId("  "));
     }
 
-    private static void insertClaim(DBQuery query, String nodeId, String graphId, String text) {
+    private static void insertClaim(DBQuery query, String nodeId, String graphId, String text) throws SQLException {
         query.insertNode(nodeId, "analyst", "Confirmed", "N/A", text, "manual",
                 Timestamp.valueOf("2017-11-15 14:28:40"), "note", "I", "{}", graphId, false);
     }

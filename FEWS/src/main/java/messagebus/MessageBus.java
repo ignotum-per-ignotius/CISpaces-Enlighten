@@ -87,20 +87,28 @@ public class MessageBus {
         } catch (java.io.IOException | java.util.concurrent.TimeoutException exc) {
             log.log(Level.SEVERE, "Failed RabbitMQ message bus connection", exc);
             exc.printStackTrace();
+            finalise();
             return false;
         }
     }
 
     /**
      * Close the connection to the RabbitMQ server.
+     * Closes whichever of the channel and connection were opened.
      */
     private void finalise() {
-        try {
-            channel.close();
-        } catch (java.io.IOException | java.util.concurrent.TimeoutException exc) { /* Nothing */ }
-        try {
-            connection.close();
-        } catch (java.io.IOException exc) { /* Nothing */ }
+        if (channel != null) {
+            try {
+                channel.close();
+            } catch (java.io.IOException | java.util.concurrent.TimeoutException exc) { /* Nothing */ }
+            channel = null;
+        }
+        if (connection != null) {
+            try {
+                connection.close();
+            } catch (java.io.IOException exc) { /* Nothing */ }
+            connection = null;
+        }
     }
 
     /**

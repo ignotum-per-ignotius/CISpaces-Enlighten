@@ -14,6 +14,7 @@ import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import utils.TimeHelper;
 
+import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.util.*;
 import java.util.logging.Level;
@@ -105,6 +106,7 @@ public class DBQuery {
     //queries to insert a node or update an existing node information in the database
     public void insertNode(String nodeID, String source, String uncert, String eval, String txt, String input,
                            Timestamp timestamp, String commit, String type, String annot, String graphID, Boolean isLocked)
+            throws SQLException
     {
         ArrayList<HashMap<String,Object>> rs = dbcn.executeQuery(
                 "SELECT nodeid FROM CISPACES_NODE WHERE nodeid = ?", nodeID);
@@ -136,6 +138,7 @@ public class DBQuery {
     //insert a node in the history table or update the information if it exists
     public void insertNodeHistory(String nodeID, String source, String uncert, String eval, String txt, String input,
                            Timestamp timestamp, String commit, String type, String annot, String graphID, boolean isLocked, String revisionID)
+            throws SQLException
     {
         ArrayList<HashMap<String,Object>> rs = dbcn.executeQuery(
                 "SELECT nodeid FROM CISPACES_NODE_HISTORY WHERE nodeid = ?", nodeID);
@@ -156,7 +159,7 @@ public class DBQuery {
     }
 
     //insert an edge into the database - edges are never updated!
-    public void insertEdge(String toID, String fromID, String formEdgeID, String edgeID, String graphID, boolean isLocked) {
+    public void insertEdge(String toID, String fromID, String formEdgeID, String edgeID, String graphID, boolean isLocked) throws SQLException {
         ArrayList<HashMap<String,Object>> rs = dbcn.executeQuery(
                 "SELECT edgeid FROM CISPACES_EDGE WHERE edgeid = ?", edgeID);
         if(rs.isEmpty()) {
@@ -169,7 +172,7 @@ public class DBQuery {
     }
 
     //populate the edge history table
-    public void insertEdgeHistory(String toID, String fromID, String formEdgeID, String edgeID, String graphID, boolean isLocked, String revisionID) {
+    public void insertEdgeHistory(String toID, String fromID, String formEdgeID, String edgeID, String graphID, boolean isLocked, String revisionID) throws SQLException {
         ArrayList<HashMap<String,Object>> rs = dbcn.executeQuery(
                 "SELECT edgeid FROM CISPACES_EDGE_HISTORY WHERE edgeid = ?", edgeID);
         if(rs.isEmpty()) {
@@ -278,7 +281,7 @@ public class DBQuery {
      * @param username The username of interest
      * @return a JSON representation of the record, null if none
      */
-    public JSONObject getUserByUsername(String username) {
+    public JSONObject getUserByUsername(String username) throws SQLException {
         ArrayList<HashMap<String,Object>> rs = dbcn.executeQuery(
                 "SELECT * FROM CISPACES_USERS WHERE USERNAME = ?", username);
         if(rs.isEmpty()) return null;
@@ -292,7 +295,7 @@ public class DBQuery {
      * @param affiliation The affiliation
      * @return The newly generated user_id, or null if the user could not be added
      */
-    public String insertUser(String username, String generatedSecuredPasswordHash, String affiliation) {
+    public String insertUser(String username, String generatedSecuredPasswordHash, String affiliation) throws SQLException {
         ArrayList<HashMap<String,Object>> rs = dbcn.executeQuery(
                 "SELECT USER_ID FROM CISPACES_USERS WHERE USERNAME = ?", username);
         if(rs.isEmpty()){
@@ -315,7 +318,7 @@ public class DBQuery {
      * @param userID The user
      * @return The analyses as a JSON formatted string
      */
-    public String getAnalysesMetaByUser(String userID) {
+    public String getAnalysesMetaByUser(String userID) throws SQLException {
         ArrayList<HashMap<String,Object>> rs = dbcn.executeQuery(
                 "SELECT * FROM CISPACES_GRAPH WHERE USERID = ?", userID);
         JSONArray jsonAnalysesMetaArray = new JSONArray();
@@ -341,7 +344,7 @@ public class DBQuery {
      * @param graphID The graph id
      * @return The analysis metadata as a JSON formatted string
      */
-    public String getAnalysisMeta(String graphID) {
+    public String getAnalysisMeta(String graphID) throws SQLException {
         System.out.println("Fetching Analysis metadata for graphid: "+graphID);
         ArrayList<HashMap<String, Object>> graphMeta = dbcn.executeQuery(
                 "SELECT * FROM CISPACES_GRAPH WHERE GRAPHID = ?", graphID);
@@ -366,7 +369,7 @@ public class DBQuery {
      * Metadata for a caller who owns the graph or is reading a shared graph.
      * @return null when the graph is missing or the caller may not read it
      */
-    public String getAnalysisMeta(String graphID, String caller) {
+    public String getAnalysisMeta(String graphID, String caller) throws SQLException {
         if (!callerMayRead(graphID, caller)) {
             return null;
         }
@@ -378,7 +381,7 @@ public class DBQuery {
      * @param graphID The graph id
      * @return The analysis as a JSON formatted string
      */
-    public String getAnalysis(String graphID) {
+    public String getAnalysis(String graphID) throws SQLException {
         System.out.println("Fetching Analysis for graphid: "+graphID);
         ArrayList<HashMap<String, Object>> graphMeta = dbcn.executeQuery(
                 "SELECT * FROM CISPACES_GRAPH WHERE GRAPHID = ?", graphID);
@@ -414,7 +417,7 @@ public class DBQuery {
      * Full analysis for a caller who owns the graph or is reading a shared graph.
      * @return null when the graph is missing or the caller may not read it
      */
-    public String getAnalysis(String graphID, String caller) {
+    public String getAnalysis(String graphID, String caller) throws SQLException {
         if (!callerMayRead(graphID, caller)) {
             return null;
         }
@@ -481,7 +484,7 @@ public class DBQuery {
     * Constructs a json object and populates it with the JSON arrays of the nodes and edges.
     * Timestamps the event and inserts the data into the database.
     */
-     public String saveLatestAnalysis(String graphID, String userID, String title) {
+     public String saveLatestAnalysis(String graphID, String userID, String title) throws SQLException {
         JSONObject jsonGraph = new JSONObject();
         jsonGraph.put("graphID",graphID);
         ArrayList<HashMap<String,Object>> resultNodes = dbcn.executeQuery(
@@ -585,7 +588,7 @@ public class DBQuery {
     }
 
         //constructs a json object containing all saved variations of an analysis and returns it in a json string format
-    public String getHistoryOfAnalysis(String graphID) {
+    public String getHistoryOfAnalysis(String graphID) throws SQLException {
         ArrayList<HashMap<String,Object>> rs = dbcn.executeQuery(
                 "SELECT * FROM CISPACES_GRAPH_HISTORY WHERE GRAPHID = ? ORDER BY TIMEST", graphID);
         JSONObject jsonHistory = new JSONObject();
@@ -605,7 +608,7 @@ public class DBQuery {
      * History for a caller who owns the graph or is reading a shared graph.
      * @return null when the graph is missing or the caller may not read it
      */
-    public String getHistoryOfAnalysis(String graphID, String caller) {
+    public String getHistoryOfAnalysis(String graphID, String caller) throws SQLException {
         if (!callerMayRead(graphID, caller)) {
             return null;
         }

@@ -91,9 +91,13 @@ public class PostgreSQLDB {
             try {
                 rs.close();
             } catch (SQLException exc) { /* Ignored */ }
+        }
+        if (s != null) {
             try {
                 s.close();
             } catch (SQLException exc) { /* Ignored */ }
+        }
+        if (c != null) {
             try {
                 c.close();
             } catch (SQLException exc) { /* Ignored */ }
