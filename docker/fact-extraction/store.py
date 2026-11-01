@@ -8,6 +8,7 @@ refreshes re-link those rows. The 2017 scenario dump stays in place: its
 import psycopg2
 
 from extractor import Lexicon, decode_triple, encode_triple, extract_phrase, extract_text
+from scenario import GRAPH_ID, SCENARIO_TITLE, build_graph
 
 
 class FactStore:
@@ -41,10 +42,11 @@ class FactStore:
 
     def ingest(self, posts, lexicon, nlp):
         written = 0
+        graph = None
         conn = self.connect()
         try:
             with conn.cursor() as cur:
-                _ensure_extractor_topics(cur)
+                _ensure_schema(cur)
                 for post in posts:
                     triples = extract_text(nlp, post.text)
                     if not triples:
@@ -52,14 +54,18 @@ class FactStore:
                     _upsert_post(cur, post)
                     _delete_extracts(cur, post.source_uri)
                     for index, triple in enumerate(triples, start=1):
-                        item_key = _insert_extract(cur, post.source_uri, index, triple)
+                        extract_uri = "%s#%s" % (post.source_uri, index)
+                        item_key = _insert_extract(cur, post.source_uri, extract_uri, triple)
                         _link_topics(cur, item_key, triple, lexicon)
+                        _replace_situation(cur, post.source_uri, extract_uri, triple)
                         written += 1
                 _delete_orphan_topics(cur)
+                if written:
+                    graph = _write_scenario(cur)
             conn.commit()
         finally:
             conn.close()
-        return written
+        return written, graph
 
     def reindex(self, lexicon):
         linked = 0
@@ -107,6 +113,10 @@ def _upsert_post(cur, post):
 
 def _delete_extracts(cur, source_uri):
     cur.execute(
+        "DELETE FROM factextract.phase1_situation WHERE source_uri = %s",
+        (source_uri,),
+    )
+    cur.execute(
         "DELETE FROM factextract.phase1_ext_db_topic_index AS topic_index "
         "USING factextract.phase1_ext_db_item AS item "
         "WHERE topic_index.item_key = item.item_key AND item.source_uri = %s",
@@ -118,19 +128,54 @@ def _delete_extracts(cur, source_uri):
     )
 
 
-def _insert_extract(cur, source_uri, index, triple):
+def _insert_extract(cur, source_uri, extract_uri, triple):
     cur.execute(
         "INSERT INTO factextract.phase1_ext_db_item "
         "(extract_uri, source_uri, extract, encoded) "
         "VALUES (%s, %s, %s, %s) RETURNING item_key",
         (
-            "%s#%s" % (source_uri, index),
+            extract_uri,
             source_uri,
             extract_phrase(triple),
             encode_triple(triple),
         ),
     )
     return cur.fetchone()[0]
+
+
+def _replace_situation(cur, source_uri, extract_uri, triple):
+    if not triple.places and not triple.times:
+        return
+    places = triple.places or [""]
+    times = triple.times or [""]
+    for place in places:
+        for time_label in times:
+            cur.execute(
+                "INSERT INTO factextract.phase1_situation "
+                "(extract_uri, source_uri, place, time_label) "
+                "VALUES (%s, %s, %s, %s) "
+                "ON CONFLICT (extract_uri, place, time_label) DO NOTHING",
+                (extract_uri, source_uri, place, time_label),
+            )
+
+
+def _write_scenario(cur):
+    cur.execute(
+        "SELECT source_uri, extract_uri, encoded "
+        "FROM factextract.phase1_ext_db_item "
+        "WHERE encoded LIKE %s "
+        "ORDER BY item_key",
+        ('{"v":1,%',),
+    )
+    graph = build_graph(cur.fetchall())
+    cur.execute(
+        "INSERT INTO factextract.phase1_scenario (scenario_key, title, graph) "
+        "VALUES (%s, %s, %s) "
+        "ON CONFLICT (scenario_key) DO UPDATE SET "
+        "title = EXCLUDED.title, graph = EXCLUDED.graph, updated_time = now()",
+        (GRAPH_ID, SCENARIO_TITLE, graph["stored"]),
+    )
+    return graph
 
 
 def _link_topics(cur, item_key, triple, lexicon):
@@ -177,6 +222,26 @@ def _topic_key(cur, topic, schema, negated, genuine):
         (topic_key,),
     )
     return topic_key
+
+
+def _ensure_schema(cur):
+    _ensure_extractor_topics(cur)
+    cur.execute(
+        "CREATE TABLE IF NOT EXISTS factextract.phase1_situation ("
+        "situation_key serial PRIMARY KEY, "
+        "extract_uri text NOT NULL, "
+        "source_uri text NOT NULL, "
+        "place text NOT NULL DEFAULT '', "
+        "time_label text NOT NULL DEFAULT '', "
+        "UNIQUE (extract_uri, place, time_label))"
+    )
+    cur.execute(
+        "CREATE TABLE IF NOT EXISTS factextract.phase1_scenario ("
+        "scenario_key text PRIMARY KEY, "
+        "title text, "
+        "graph text NOT NULL, "
+        "updated_time timestamp with time zone DEFAULT now())"
+    )
 
 
 def _ensure_extractor_topics(cur):

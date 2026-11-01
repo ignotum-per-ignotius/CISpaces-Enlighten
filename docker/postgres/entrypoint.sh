@@ -91,6 +91,24 @@ seed_database() {
     load_sql intelanalysis_factextract_vocab_keyword.sql
     load_sql scenario-18-dec-2017.sql
     psql -d intelanalysis -v ON_ERROR_STOP=1 -q >/dev/null <<'SQL'
+CREATE TABLE IF NOT EXISTS factextract.phase1_extractor_topic (
+    topic_key integer PRIMARY KEY
+        REFERENCES factextract.phase1_ext_db_topic(topic_key) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS factextract.phase1_situation (
+    situation_key serial PRIMARY KEY,
+    extract_uri text NOT NULL,
+    source_uri text NOT NULL,
+    place text NOT NULL DEFAULT '',
+    time_label text NOT NULL DEFAULT '',
+    UNIQUE (extract_uri, place, time_label)
+);
+CREATE TABLE IF NOT EXISTS factextract.phase1_scenario (
+    scenario_key text PRIMARY KEY,
+    title text,
+    graph text NOT NULL,
+    updated_time timestamp with time zone DEFAULT now()
+);
 GRANT ALL ON SCHEMA factextract TO intelanalysis;
 GRANT ALL ON ALL TABLES IN SCHEMA factextract TO intelanalysis;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA factextract TO intelanalysis;

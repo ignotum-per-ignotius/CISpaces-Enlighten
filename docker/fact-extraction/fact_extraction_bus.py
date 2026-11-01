@@ -2,14 +2,16 @@
 """Fact-extraction service for the FEWS fanout exchange.
 
 FEWS publishes vocabulary control messages to ``cispaces_exchange`` and reads
-facts from the ``intelanalysis`` database. A text message on the same exchange
-is split into sentences, given a subject-relation-object triple, and stored in
-``factextract.phase1_post_db_item``, ``phase1_ext_db_item``,
-``phase1_ext_db_topic``, and ``phase1_ext_db_topic_index``.
+facts from the ``intelanalysis`` database. A text message on the same exchange,
+or a text file dropped in the inbox, is split into verb-mediated
+subject-relation-object facts and stored in the phase-1 tables. Place and
+time groups go in ``factextract.phase1_situation``. The same facts are written
+as one scenario graph.
 
 The broker is told to auto-ack, which is the 2017 consumer's ``no_ack``
 setting. FEWS publishes without publisher confirms and does not wait for a
-consumer ack. Message bodies are not written to the log.
+consumer ack. A vocabulary update is applied only after its reindex commits.
+Message bodies are not written to the log.
 """
 
 import configparser
@@ -17,12 +19,15 @@ import json
 import os
 import signal
 import sys
+import threading
 import time
 
 import pika
 
 from extractor import apply_control_lexicon, load_nlp, message_kind, posts_from_payload
 from extractor import Lexicon
+from inbox import INBOX_DIR, poll_forever, publish_message
+from scenario import publish_scenario
 from store import FactStore
 
 INI_PATH = os.environ.get(
@@ -87,8 +92,16 @@ def handle_payload(store, lexicon_box, nlp, payload):
         if not posts:
             log("rejected fact-extraction message: no text")
             return
-        written = store.ingest(posts, lexicon_box[0], nlp)
-        log("stored facts extracts=%s posts=%s" % (written, len(posts)))
+        written, graph = store.ingest(posts, lexicon_box[0], nlp)
+        workbench = "skipped"
+        nodes = 0
+        if graph is not None:
+            nodes = len(graph["nodes"])
+            workbench = publish_scenario(graph)
+        log(
+            "stored facts extracts=%s posts=%s scenario_nodes=%s workbench=%s"
+            % (written, len(posts), nodes, workbench)
+        )
         return
     log("rejected fact-extraction message: unknown shape")
 
@@ -163,7 +176,14 @@ def consume(cfg, store, lexicon_box, nlp):
     signal.signal(signal.SIGINT, stop)
     with open(READY_PATH, "w", encoding="utf-8") as handle:
         handle.write("ready\n")
-    log("fact-extraction consuming exchange %s" % exchange)
+    inbox = threading.Thread(
+        target=poll_forever,
+        args=(cfg, publish_message),
+        name="fact-inbox",
+        daemon=True,
+    )
+    inbox.start()
+    log("fact-extraction consuming exchange %s inbox %s" % (exchange, INBOX_DIR))
     try:
         channel.start_consuming()
     finally:

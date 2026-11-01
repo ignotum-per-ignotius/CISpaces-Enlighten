@@ -1,5 +1,6 @@
 """Extractor checks that do not need PostgreSQL or RabbitMQ."""
 
+import json
 import unittest
 
 from extractor import (
@@ -53,6 +54,43 @@ class ExtractorTest(unittest.TestCase):
         confirmed = self.extract("Confirmed rioting on NYSE.")
         self.assertTrue(any(triple.genuine is True for triple in confirmed))
         self.assertTrue(any("NYSE" in triple.object for triple in confirmed))
+
+    def test_reverb_relation_and_second_verb(self):
+        deal = self.extract("The NYSE made a deal with the mayor.")
+        match = [triple for triple in deal if "mayor" in triple.object.lower()]
+        self.assertTrue(match)
+        self.assertIn("deal", match[0].relation)
+        self.assertIn("with", match[0].relation)
+        self.assertEqual(match[0].pattern, "reverb")
+        self.assertIn("NYSE", match[0].subject)
+        coordinated = self.extract("The NYSE reported unrest and closed the hospital.")
+        relations = {triple.relation for triple in coordinated}
+        self.assertTrue(any("report" in relation for relation in relations))
+        self.assertTrue(any(relation == "closed" for relation in relations))
+        self.assertGreaterEqual(len(coordinated), 2)
+
+    def test_fact_level_negation_and_genuine(self):
+        mixed = self.extract("The NYSE reported unrest, but there is no virus.")
+        unrest = [triple for triple in mixed if "unrest" in " ".join((triple.subject, triple.object)).lower()]
+        virus = [triple for triple in mixed if "virus" in " ".join((triple.subject, triple.object, triple.relation)).lower()]
+        self.assertTrue(unrest)
+        self.assertTrue(virus)
+        self.assertFalse(any(triple.negated for triple in unrest))
+        self.assertTrue(any(triple.negated for triple in virus))
+        claims = self.extract("It was a false report on the virus, and the NYSE reported unrest.")
+        false_claim = [triple for triple in claims if triple.genuine is False]
+        nyse = [triple for triple in claims if "NYSE" in triple.subject or "NYSE" in triple.object]
+        self.assertTrue(false_claim)
+        self.assertTrue(nyse)
+        self.assertTrue(all(triple.genuine is None for triple in nyse))
+
+    def test_place_and_time(self):
+        triples = self.extract("Police closed the NYSE in New York on Tuesday.")
+        self.assertTrue(triples)
+        self.assertTrue(any("New York" in triple.places for triple in triples))
+        self.assertTrue(any("Tuesday" in triple.times for triple in triples))
+        city = self.extract("There is no unrest in the city.")
+        self.assertTrue(any("city" in " ".join(triple.places).lower() for triple in city))
 
     def test_lexicon_matches_phrase_and_stem(self):
         lexicon = Lexicon.from_control({
@@ -130,6 +168,27 @@ class ExtractorTest(unittest.TestCase):
         self.assertEqual(linked, 3)
         self.assertIs(box[0], store.seen)
         self.assertEqual(dict(box[0].match("nyse"))["nyse"], "building")
+
+    def test_scenario_graph_and_dropped_file(self):
+        from inbox import message_from_file
+        from scenario import GRAPH_ID, build_graph
+
+        triple = self.extract("Police closed the NYSE in New York on Tuesday.")[0]
+        graph = build_graph([
+            ("cispaces:file:note.txt", "cispaces:file:note.txt#1", encode_triple(triple)),
+        ])
+        self.assertEqual(graph["graphID"], GRAPH_ID)
+        texts = {node["text"] for node in graph["nodes"]}
+        self.assertIn("New York", texts)
+        self.assertIn("Tuesday", texts)
+        self.assertTrue(graph["edges"])
+        stored = json.loads(graph["stored"])
+        self.assertNotIn("stored", stored)
+        body = json.loads(message_from_file("note.txt", b"Police closed the NYSE in New York on Tuesday."))
+        self.assertEqual(body["source_uri"], "cispaces:file:note.txt")
+        self.assertIn("New York", body["text"])
+        wrapped = json.loads(message_from_file("already.json", b'{"text":"The NYSE reported unrest."}'))
+        self.assertEqual(wrapped["text"], "The NYSE reported unrest.")
 
     def test_encoded_roundtrip(self):
         triple = self.extract("The NYSE reported unrest.")[0]

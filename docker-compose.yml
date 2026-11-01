@@ -1,8 +1,9 @@
 # CISpaces workbench plus the services the workbench image does not start.
 # PostgreSQL, RabbitMQ, and fact extraction share the workbench network
 # namespace, so FEWS keeps using localhost:5432 and localhost:5672.
-# Fact extraction reads vocabulary and text messages on cispaces_exchange
-# and writes subject-relation-object rows into the phase-1 fact tables.
+# Fact extraction reads vocabulary and text messages on cispaces_exchange,
+# and text files dropped in the fact-inbox volume. It writes
+# subject-relation-object rows, place/time groups, and one scenario graph.
 # The workbench image still runs on its own with only CISPACES_DERBY_PASSWORD.
 #
 # Export the three CISPACES_* passwords (or put them in a gitignored .env)
@@ -75,6 +76,9 @@ services:
     environment:
       CISPACES_POSTGRES_PASSWORD: ${CISPACES_POSTGRES_PASSWORD:?Set CISPACES_POSTGRES_PASSWORD}
       CISPACES_RABBITMQ_PASSWORD: ${CISPACES_RABBITMQ_PASSWORD:?Set CISPACES_RABBITMQ_PASSWORD}
+      FACT_EXTRACTION_INBOX: /var/fact-inbox
+    volumes:
+      - fact-inbox:/var/fact-inbox
     healthcheck:
       test: ["CMD", "test", "-f", "/tmp/fact-extraction.ready"]
       interval: 5s
@@ -85,3 +89,4 @@ services:
 volumes:
   cispaces-derby:
   cispaces-postgres:
+  fact-inbox:

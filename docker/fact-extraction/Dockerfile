@@ -20,10 +20,12 @@ RUN apt-get update \
     && useradd --system --home-dir /opt/fact-extraction --shell /usr/sbin/nologin factextract
 
 WORKDIR /opt/fact-extraction
-COPY extractor.py store.py fact_extraction_bus.py test_extract.py /opt/fact-extraction/
+COPY extractor.py store.py scenario.py inbox.py fact_extraction_bus.py test_extract.py /opt/fact-extraction/
 COPY fact_extraction_app.ini.template /opt/fact-extraction/fact_extraction_app.ini.template
 COPY entrypoint.sh /opt/fact-extraction/docker-entrypoint.sh
 RUN python -m unittest test_extract.py \
+    && mkdir -p /var/fact-inbox/done \
+    && chmod 1777 /var/fact-inbox /var/fact-inbox/done \
     && chmod 755 /opt/fact-extraction/docker-entrypoint.sh \
     && chown -R factextract:factextract /opt/fact-extraction
 
