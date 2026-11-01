@@ -76,6 +76,37 @@ Source: `VC/src/main/java/vcservlet/VCServlet.java`. Jersey package `vcservlet`,
 
   Requires a JWT. JSON body of a history snapshot. `graphID` must be a graph the caller owns, and the embedded node and edge records must use that same graph id.
 
+## AI
+
+Source: `VC/src/main/java/ai/AiResource.java`, client `VC/src/main/java/ai/LlmClient.java`, key files in `VC/src/main/java/ai/ProviderKeyStore.java`. Jersey package `ai`, mapped to `/ai/*` in `VC/WebContent/WEB-INF/web.xml`. The servlet registers `filters.JWTTokenNeededFilter` (the same HS512 signature check as the other services) and does not register Jersey's `LoggingFilter`. The prompt, provider API keys, and bearer tokens are not logged.
+
+No vendor key is built into the source. A key is never written into the repository and is never returned in a response.
+
+- `POST VC/ai/keys/{provider}`
+
+  Requires a JWT. `{provider}` must be `openai`, `anthropic`, or `google`. The caller must be an installation owner: `CISPACES_USERS.IS_ADMIN` set for that user id. Anyone else gets `403`.
+
+  JSON body `{"apiKey":"..."}`. The value is stored in a server-side file, `{directory}/{provider}.key`, created with owner read/write permissions only. `{directory}` is `CISPACES_AI_KEY_DIR`, or `$CATALINA_BASE/conf/cispaces-ai-keys` when that is unset and Tomcat's `catalina.base` is set, otherwise `~/.cispaces/ai-keys`. Replacing a key overwrites that file.
+
+  Returns `{"provider":"openai","stored":true}`. The stored secret is not in the body.
+
+- `POST VC/ai/complete`
+
+  Requires a JWT (`Authorization: Bearer`). JSON body `{"prompt":"...","provider":"openai","graph":{...}}`. `prompt` is required (at most 4000 characters). `provider` is optional and is one of `openai`, `anthropic`, or `google`. `graph` is optional JSON (at most 200000 characters). Returns `{"text":"..."}` with the model text.
+
+  The API key is `CISPACES_AI_API_KEY` when that variable is set. Otherwise it is the stored key for `provider`. `503` `{"error":"AI API key is not configured"}` when neither is available.
+
+  `CISPACES_AI_BASE_URL`, when set, overrides the provider endpoint and the call is OpenAI-compatible `POST {CISPACES_AI_BASE_URL}/chat/completions`. When it is unset, the provider defaults are OpenAI `https://api.openai.com/v1/chat/completions`, Anthropic `https://api.anthropic.com/v1/messages`, and Google `https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent`. The key is sent as a header (`Authorization: Bearer`, `x-api-key`, or `x-goog-api-key`), not in the URL.
+
+  `CISPACES_AI_MODEL`, when set, overrides the model. Defaults are `gpt-4o`, `claude-sonnet-4-5`, and `gemini-2.5-flash`. A missing, unparseable, or non-http base URL, or a model with no provider default, is also `503`. An upstream failure is `502`.
+
+  Environment variables:
+
+  - `CISPACES_AI_BASE_URL` — optional override of the provider endpoint. When set, the call uses the OpenAI-compatible protocol
+  - `CISPACES_AI_MODEL` — optional model name override. A slash is allowed when the name is sent only in the JSON body. Characters that would change the Google request path, or inject a header, are rejected
+  - `CISPACES_AI_API_KEY` — optional bearer key that overrides the stored provider key
+  - `CISPACES_AI_KEY_DIR` — optional directory for the `{provider}.key` files
+
 ## ERS
 
 Source: `ers/src/ers/ERSServlet.java`. Jersey package `ers`, mapped to `/rest/*`.
