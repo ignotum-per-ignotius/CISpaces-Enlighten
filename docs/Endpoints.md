@@ -76,6 +76,24 @@ Source: `VC/src/main/java/vcservlet/VCServlet.java`. Jersey package `vcservlet`,
 
   Requires a JWT. JSON body of a history snapshot. `graphID` must be a graph the caller owns, and the embedded node and edge records must use that same graph id.
 
+## AI
+
+Source: `VC/src/main/java/ai/AiResource.java`, client `VC/src/main/java/ai/LlmClient.java`. Jersey package `ai`, mapped to `/ai/*` in `VC/WebContent/WEB-INF/web.xml`. The servlet registers `filters.JWTTokenNeededFilter` (the same HS512 signature check as the other services) and does not register Jersey's `LoggingFilter`. The prompt, the model API key, and the bearer token are not logged.
+
+The client sends an OpenAI-compatible `POST {CISPACES_AI_BASE_URL}/chat/completions`. No vendor key is built into the source.
+
+- `POST VC/ai/complete`
+
+  Requires a JWT (`Authorization: Bearer`). JSON body `{"prompt":"...","graph":{...}}`. `prompt` is required (at most 4000 characters). `graph` is optional JSON (at most 200000 characters). Returns `{"text":"..."}` with the model text.
+
+  `503` `{"error":"AI API key is not configured"}` when `CISPACES_AI_API_KEY` is missing or blank. A missing base URL or model name is also `503`. An upstream failure is `502`.
+
+  Environment variables:
+
+  - `CISPACES_AI_BASE_URL` — model API root, for example `https://api.openai.com/v1`
+  - `CISPACES_AI_MODEL` — model name sent as `model`
+  - `CISPACES_AI_API_KEY` — bearer key for the model API
+
 ## ERS
 
 Source: `ers/src/ers/ERSServlet.java`. Jersey package `ers`, mapped to `/rest/*`.
