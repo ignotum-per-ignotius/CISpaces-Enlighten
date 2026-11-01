@@ -65,6 +65,9 @@ if [ -f "$context_xml" ] && grep -q '__CISPACES_DERBY_PASSWORD__' "$context_xml"
             }
         ' "$context_xml" > "$context_tmp"
         mv "$context_tmp" "$context_xml"
+        # A cross-filesystem mv keeps the existing mode. Packaged copies are
+        # often 644, so lock the file after the password is written.
+        chmod 600 "$context_xml"
         rm -f "$password_file"
         unset password_file
     fi
