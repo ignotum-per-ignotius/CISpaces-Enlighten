@@ -2,7 +2,17 @@
 
 import unittest
 
-from extractor import Lexicon, decode_triple, encode_triple, extract_phrase, extract_text, load_nlp, message_kind, posts_from_payload
+from extractor import (
+    Lexicon,
+    apply_control_lexicon,
+    decode_triple,
+    encode_triple,
+    extract_phrase,
+    extract_text,
+    load_nlp,
+    message_kind,
+    posts_from_payload,
+)
 
 
 class ExtractorTest(unittest.TestCase):
@@ -93,6 +103,33 @@ class ExtractorTest(unittest.TestCase):
         self.assertEqual(len(posts), 1)
         self.assertEqual(posts[0].source_uri, "https://twitter.com/cispaces/status/9001")
         self.assertEqual(posts[0].created_at.year, 2012)
+
+    def test_control_lexicon_waits_for_reindex(self):
+        kept = Lexicon.empty()
+        box = [kept]
+
+        class FailedStore:
+            def reindex(self, _lexicon):
+                raise RuntimeError("reindex failed")
+
+        payload = {"lexicon": {"nyse": ["building"]}, "phrase_mapping": {"nyse": ["nyse"]}}
+        with self.assertRaises(RuntimeError):
+            apply_control_lexicon(FailedStore(), box, payload)
+        self.assertIs(box[0], kept)
+
+        class RecordingStore:
+            def __init__(self):
+                self.seen = None
+
+            def reindex(self, lexicon):
+                self.seen = lexicon
+                return 3
+
+        store = RecordingStore()
+        linked = apply_control_lexicon(store, box, payload)
+        self.assertEqual(linked, 3)
+        self.assertIs(box[0], store.seen)
+        self.assertEqual(dict(box[0].match("nyse"))["nyse"], "building")
 
     def test_encoded_roundtrip(self):
         triple = self.extract("The NYSE reported unrest.")[0]

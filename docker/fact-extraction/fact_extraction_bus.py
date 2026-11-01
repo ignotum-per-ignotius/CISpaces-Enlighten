@@ -21,7 +21,7 @@ import time
 
 import pika
 
-from extractor import load_nlp, message_kind, posts_from_payload
+from extractor import apply_control_lexicon, load_nlp, message_kind, posts_from_payload
 from extractor import Lexicon
 from store import FactStore
 
@@ -79,8 +79,7 @@ def remember_count(count):
 def handle_payload(store, lexicon_box, nlp, payload):
     kind = message_kind(payload)
     if kind == "vocabulary":
-        lexicon_box[0] = Lexicon.from_control(payload)
-        linked = store.reindex(lexicon_box[0])
+        linked = apply_control_lexicon(store, lexicon_box, payload)
         log("accepted vocabulary links=%s" % linked)
         return
     if kind == "text":

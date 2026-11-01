@@ -236,6 +236,19 @@ def decode_triple(encoded):
     )
 
 
+def apply_control_lexicon(store, lexicon_box, payload):
+    """Install a vocabulary snapshot only after its reindex commits.
+
+    ``store.reindex`` is expected to raise if the write does not commit. The
+    in-memory lexicon stays on the previous snapshot in that case, and the
+    caller must not treat the control message as applied.
+    """
+    updated = Lexicon.from_control(payload)
+    linked = store.reindex(updated)
+    lexicon_box[0] = updated
+    return linked
+
+
 def extract_phrase(triple):
     parts = [triple.subject, triple.relation, triple.object]
     return " ".join(part for part in parts if part).lower().strip()

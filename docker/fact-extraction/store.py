@@ -44,6 +44,7 @@ class FactStore:
         conn = self.connect()
         try:
             with conn.cursor() as cur:
+                _ensure_extractor_topics(cur)
                 for post in posts:
                     triples = extract_text(nlp, post.text)
                     if not triples:
@@ -65,6 +66,7 @@ class FactStore:
         conn = self.connect()
         try:
             with conn.cursor() as cur:
+                _ensure_extractor_topics(cur)
                 cur.execute(
                     "SELECT item_key, encoded FROM factextract.phase1_ext_db_item "
                     "WHERE encoded LIKE %s",
@@ -168,13 +170,41 @@ def _topic_key(cur, topic, schema, negated, genuine):
         "VALUES (%s, %s, %s, %s) RETURNING topic_key",
         (topic, schema, negated, genuine),
     )
-    return cur.fetchone()[0]
+    topic_key = cur.fetchone()[0]
+    cur.execute(
+        "INSERT INTO factextract.phase1_extractor_topic (topic_key) VALUES (%s) "
+        "ON CONFLICT (topic_key) DO NOTHING",
+        (topic_key,),
+    )
+    return topic_key
+
+
+def _ensure_extractor_topics(cur):
+    """Remember topic rows this process inserts.
+
+    Orphan cleanup deletes only those keys. A 2017 scenario topic with no
+    index row stays, so GET /fewsservlet/topics still lists it.
+    """
+    cur.execute(
+        "CREATE TABLE IF NOT EXISTS factextract.phase1_extractor_topic ("
+        "topic_key integer PRIMARY KEY "
+        "REFERENCES factextract.phase1_ext_db_topic(topic_key) ON DELETE CASCADE)"
+    )
 
 
 def _delete_orphan_topics(cur):
+    _ensure_extractor_topics(cur)
     cur.execute(
         "DELETE FROM factextract.phase1_ext_db_topic AS topic "
-        "WHERE NOT EXISTS ("
+        "WHERE topic.topic_key IN ("
+        "SELECT topic_key FROM factextract.phase1_extractor_topic) "
+        "AND NOT EXISTS ("
         "SELECT 1 FROM factextract.phase1_ext_db_topic_index AS topic_index "
         "WHERE topic_index.topic_key = topic.topic_key)"
+    )
+    cur.execute(
+        "DELETE FROM factextract.phase1_extractor_topic AS owned "
+        "WHERE NOT EXISTS ("
+        "SELECT 1 FROM factextract.phase1_ext_db_topic AS topic "
+        "WHERE topic.topic_key = owned.topic_key)"
     )
