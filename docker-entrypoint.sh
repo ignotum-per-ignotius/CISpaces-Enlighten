@@ -131,13 +131,49 @@ wait_for_derby() {
     return 1
 }
 
+# create=true makes the gaiandb directory as soon as ij connects, before the
+# SQL import runs. The directory is not a finished seed. The marker is.
+seed_marker() {
+    printf '%s\n' "${CISPACES}/data/derby/gaiandb.seeded"
+}
+
+# Stop Derby before deleting. A still-running network server can rewrite the
+# database files after rm and leave a partial directory behind.
+discard_open_database() {
+    local dbdir="$1"
+    local i
+    if [ -n "${derby_pid:-}" ] && kill -0 "$derby_pid" 2>/dev/null; then
+        "${CISPACES}/tools/derby/bin/stopNetworkServer" -h 127.0.0.1 >/dev/null 2>&1 || true
+        for i in 1 2 3 4 5 6 7 8 9 10; do
+            if ! kill -0 "$derby_pid" 2>/dev/null; then
+                break
+            fi
+            sleep 1
+        done
+        if kill -0 "$derby_pid" 2>/dev/null; then
+            kill "$derby_pid" 2>/dev/null || true
+        fi
+        wait "$derby_pid" 2>/dev/null || true
+        derby_pid=""
+    fi
+    rm -rf "$dbdir"
+}
+
 seed_derby() {
     set +x
     local dbdir="${CISPACES}/data/derby/gaiandb"
-    local ij_sql ij_log sql_file
-    if [ -d "$dbdir" ]; then
+    local marker ij_sql ij_log sql_file marker_tmp pwfile
+    marker=$(seed_marker)
+    if [ -f "$marker" ] && [ -d "$dbdir" ]; then
         echo "# Derby database already present"
         return 0
+    fi
+    # An interrupted start, or a cleanup that raced the network server, leaves
+    # this directory without the marker. Remove it so this start imports again.
+    if [ -d "$dbdir" ] || [ -f "$marker" ]; then
+        echo "# Removing an unfinished Derby database so the seed can be retried"
+        rm -f "$marker"
+        rm -rf "$dbdir"
     fi
     sql_file="${CISPACES}/config/create-cispaces-tables.sql"
     if [ ! -f "$sql_file" ]; then
@@ -153,13 +189,15 @@ seed_derby() {
         cat "$sql_file"
     } > "$ij_sql"
     if "${CISPACES}/tools/derby/bin/ij" "$ij_sql" >"$ij_log" 2>&1; then
+        marker_tmp=$(mktemp "${CISPACES}/data/derby/gaiandb.seeded.XXXXXX")
+        printf '%s\n' 'seeded' > "$marker_tmp"
+        mv "$marker_tmp" "$marker"
         rm -f "$ij_sql" "$ij_log"
         echo "# Created the Derby database"
         return 0
     fi
     echo "# Derby database creation failed. The value is not printed."
     # The secret is read from a mode 600 file, not passed as an awk argument.
-    local pwfile
     pwfile=$(mktemp)
     chmod 600 "$pwfile"
     printf '%s' "$CISPACES_DERBY_PASSWORD" > "$pwfile"
@@ -179,7 +217,7 @@ seed_derby() {
     ' "$ij_log"
     rm -f "$pwfile"
     rm -f "$ij_sql" "$ij_log"
-    rm -rf "$dbdir"
+    discard_open_database "$dbdir"
     exit 1
 }
 
