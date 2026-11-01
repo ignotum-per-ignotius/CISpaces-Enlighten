@@ -15,9 +15,9 @@ unpublished wheels named in ``CISpaces/factextraction`` ``build.xml``:
 
 ``get_seed_tuples_from_extractions`` is called by ``fact_extraction_app.py``
 and is not defined on the 1.0.0 library. ``seed_tuples_from_extractions``
-below is a reconstruction of that filter: keep an annotation window whose
-type sequence is one of the original ``setSeedTuples``. It is not the
-0.1.0 function.
+below is a reconstruction of that filter. Each verb is its own fact. A
+window matches ``setSeedTuples``, and extra trailing ``ARGUMENT``s stay on
+that fact. It is not the 0.1.0 function.
 
 The dependency-parser template learner is not run on the request path. The
 2017 app used it to build open-extraction templates, and
@@ -44,29 +44,140 @@ PATTERN = "soton-reverb-3.7.0"
 _NEGATION = {"not", "n't", "never", "no"}
 
 
+def _is_negation_token(token):
+    lower = token.lower()
+    return lower in _NEGATION or lower.endswith("n't")
+
+
+def _relation_runs(sent):
+    """Consecutive RELATION annotations are one verb phrase."""
+    runs = []
+    index = 0
+    count = len(sent)
+    while index < count:
+        if sent[index][0] == "RELATION":
+            start = index
+            index += 1
+            while index < count and sent[index][0] == "RELATION":
+                index += 1
+            runs.append((start, index))
+        else:
+            index += 1
+    return runs
+
+
+def _argument_items(sent, start, end):
+    return [sent[index] for index in range(start, end) if sent[index][0] == "ARGUMENT"]
+
+
+def _accepted_types(types, set_sequences):
+    """A listed seed, or that seed plus extra trailing ARGUMENTs."""
+    if "RELATION" not in types or "ARGUMENT" not in types:
+        return False
+    if types in set_sequences:
+        return True
+    end = len(types)
+    while end > 1 and types[end - 1] == "ARGUMENT":
+        end -= 1
+        prefix = types[:end]
+        if prefix in set_sequences and "RELATION" in prefix and "ARGUMENT" in prefix:
+            return True
+    return False
+
+
 def seed_tuples_from_extractions(list_sent_extractions, set_sequences):
-    """Keep the longest seed window in each sentence.
+    """Keep each verb-mediated fact.
 
     This is the reconstructed stand-in for
     ``openiepy.comp_sem_lib.get_seed_tuples_from_extractions``.
+    It is not the 0.1.0 function. A coordinated verb is not folded into the
+    previous fact by a longer trailing-argument pattern. One argument between
+    two verbs stays the object of the first verb. The later verb then reuses
+    that subject so its tuple still matches ``setSeedTuples``. Two or more
+    arguments between verbs leave the last one as the next subject.
     """
     found = []
     for sent in list_sent_extractions:
-        best = None
-        count = len(sent)
-        for start in range(count):
-            for end in range(start + 1, count + 1):
-                window = sent[start:end]
-                types = tuple(item[0] for item in window)
-                if types not in set_sequences:
-                    continue
-                if "RELATION" not in types or "ARGUMENT" not in types:
-                    continue
-                if best is None or len(window) > len(best):
-                    best = window
-        if best is not None:
-            found.append(tuple(best))
+        runs = _relation_runs(sent)
+        previous_subject = ()
+        consumed = 0
+        for run_index, (rel_start, rel_end) in enumerate(runs):
+            next_rel = runs[run_index + 1][0] if run_index + 1 < len(runs) else len(sent)
+            subject_items = _argument_items(sent, consumed, rel_start)
+            object_items = _argument_items(sent, rel_end, next_rel)
+            if run_index + 1 < len(runs) and len(object_items) >= 2:
+                object_items = object_items[:-1]
+            reused = False
+            if not subject_items and previous_subject:
+                subject_items = list(previous_subject)
+                reused = True
+            window = tuple(subject_items) + tuple(sent[rel_start:rel_end]) + tuple(object_items)
+            if not _accepted_types(tuple(item[0] for item in window), set_sequences):
+                consumed = rel_end
+                continue
+            found.append(window)
+            if subject_items and not reused:
+                previous_subject = tuple(subject_items)
+            if object_items:
+                last_object = sent.index(object_items[-1], rel_end)
+                consumed = last_object + 1
+            else:
+                consumed = rel_end
     return found
+
+
+def _phrase_words(items):
+    words = []
+    for item in items:
+        words.extend(str(part) for part in item[1:] if part)
+    return words
+
+
+def _find_words(sent, words, start_at):
+    positions = []
+    cursor = start_at
+    for word in words:
+        found = None
+        for index in range(cursor, len(sent)):
+            if sent[index][0] == word:
+                found = index
+                break
+        if found is None:
+            return None
+        positions.append(found)
+        cursor = found + 1
+    return positions
+
+
+def _fact_tokens(sent, seed, start_at):
+    """Tokens of this fact, including a negation that sits inside its span.
+
+    The span runs from the local subject through the object. A subject reused
+    from an earlier clause is not part of the span, so a later fact does not
+    inherit an earlier negation.
+    """
+    rel_at = [index for index, item in enumerate(seed) if item[0] == "RELATION"]
+    if not rel_at:
+        rows = [{"t": token, "pos": pos} for token, pos in sent]
+        return rows, any(_is_negation_token(token) for token, _pos in sent), start_at
+    first_rel = rel_at[0]
+    last_rel = rel_at[-1]
+    rel_pos = _find_words(sent, _phrase_words(seed[first_rel:last_rel + 1]), start_at)
+    if not rel_pos:
+        rel_pos = _find_words(sent, _phrase_words(seed[first_rel:last_rel + 1]), 0)
+    if not rel_pos:
+        rows = [{"t": word, "pos": ""} for word in _phrase_words(seed)]
+        return rows, any(_is_negation_token(word) for word in _phrase_words(seed)), start_at
+    obj_pos = _find_words(sent, _phrase_words(seed[last_rel + 1:]), rel_pos[-1] + 1) or []
+    subj_pos = _find_words(sent, _phrase_words(seed[:first_rel]), start_at) or []
+    if subj_pos and subj_pos[-1] < rel_pos[0]:
+        start = subj_pos[0]
+    else:
+        start = rel_pos[0]
+    end = obj_pos[-1] if obj_pos else rel_pos[-1]
+    rows = [{"t": token, "pos": pos} for token, pos in sent[start:end + 1]]
+    negated = any(_is_negation_token(token) for token, _pos in sent[start:end + 1])
+    return rows, negated, end + 1
 
 
 def _phrase(items):
@@ -155,15 +266,15 @@ class StanfordOpenIE:
             )
             seeds = seed_tuples_from_extractions(extractions, patterns.setSeedTuples)
             sentence = " ".join(token for token, _pos in sent)
-            token_rows = [{"t": token, "pos": pos} for token, pos in sent]
-            negated = any(token.lower() in _NEGATION or token.lower().endswith("n't") for token, _pos in sent)
             seen = set()
+            cursor = 0
             for seed in seeds:
                 subject, relation, obj = _split_seed(seed)
                 key = (subject.lower(), relation.lower(), obj.lower())
                 if key in seen or (not subject and not obj):
                     continue
                 seen.add(key)
+                token_rows, negated, cursor = _fact_tokens(sent, seed, cursor)
                 triples.append(Triple(
                     sentence=sentence,
                     subject=subject,
