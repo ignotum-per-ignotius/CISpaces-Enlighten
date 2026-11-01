@@ -4,19 +4,20 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * OpenAI-compatible chat client. The base URL, model name, and API key come from
- * the environment. Nothing here is a vendor key, and the prompt, key, and token
- * are never written to the log.
+ * Calls OpenAI, Anthropic, or Google. {@code CISPACES_AI_API_KEY} overrides a stored
+ * provider key. {@code CISPACES_AI_BASE_URL} forces the OpenAI-compatible protocol.
+ * The prompt, the API key, and tokens are never written to the log.
  */
 public class LlmClient {
 
@@ -31,85 +32,84 @@ public class LlmClient {
     private final String baseUrl;
     private final String model;
     private final String apiKey;
+    private final Exchange exchange;
+
+    public interface Exchange {
+        String post(String url, Map<String, String> headers, byte[] body);
+    }
 
     public LlmClient() {
-        this(System.getenv(ENV_BASE_URL), System.getenv(ENV_MODEL), System.getenv(ENV_API_KEY));
+        this(System.getenv(ENV_BASE_URL), System.getenv(ENV_MODEL), System.getenv(ENV_API_KEY), null);
     }
 
     public LlmClient(String baseUrl, String model, String apiKey) {
+        this(baseUrl, model, apiKey, null);
+    }
+
+    public LlmClient(String baseUrl, String model, String apiKey, Exchange exchange) {
         this.baseUrl = baseUrl;
         this.model = model;
         this.apiKey = apiKey;
+        this.exchange = exchange == null ? new HttpExchange() : exchange;
+    }
+
+    public String complete(String prompt, String graphJson) {
+        return complete(prompt, graphJson, null, null);
     }
 
     /**
-     * @param prompt analyst instruction, already checked by the resource
-     * @param graphJson optional analysis graph, or null
-     * @return the model message text
+     * @param storedKey key loaded for {@code provider}, ignored when the env key is set
      */
-    public String complete(String prompt, String graphJson) {
-        String key = configuredSecret(apiKey);
+    public String complete(String prompt, String graphJson, String provider, String storedKey) {
+        String key = usableSecret(apiKey);
+        if (key == null) {
+            key = usableSecret(storedKey);
+        }
         if (key == null) {
             log.warning("AI API key is not configured");
             throw new NotConfiguredException(MISSING_KEY_MESSAGE);
         }
-        if (isBlank(baseUrl)) {
+        String content = userContent(prompt, graphJson);
+        if (!isBlank(baseUrl)) {
+            String modelName = modelName(provider);
+            return messageText(exchange.post(
+                    chatCompletionsUrl(baseUrl),
+                    bearerHeaders(key),
+                    openaiBody(modelName, content)));
+        }
+        if (provider == null) {
             log.warning("AI model base URL is not configured");
             throw new NotConfiguredException("AI model base URL is not configured");
         }
-        if (isBlank(model)) {
+        String modelName = modelName(provider);
+        if (ProviderKeyStore.ANTHROPIC.equals(provider)) {
+            return anthropicText(exchange.post(
+                    ProviderKeyStore.defaultBaseUrl(provider) + "/v1/messages",
+                    anthropicHeaders(key),
+                    anthropicBody(modelName, content)));
+        }
+        if (ProviderKeyStore.GOOGLE.equals(provider)) {
+            return googleText(exchange.post(
+                    ProviderKeyStore.defaultBaseUrl(provider) + "/models/" + modelName + ":generateContent",
+                    googleHeaders(key),
+                    googleBody(content)));
+        }
+        return messageText(exchange.post(
+                chatCompletionsUrl(ProviderKeyStore.defaultBaseUrl(ProviderKeyStore.OPENAI)),
+                bearerHeaders(key),
+                openaiBody(modelName, content)));
+    }
+
+    private String modelName(String provider) {
+        if (!isBlank(model)) {
+            return safeModel(model);
+        }
+        String fallback = ProviderKeyStore.defaultModel(provider);
+        if (fallback == null) {
             log.warning("AI model name is not configured");
             throw new NotConfiguredException("AI model name is not configured");
         }
-
-        HttpURLConnection connection = null;
-        try {
-            URL url = new URL(chatCompletionsUrl(baseUrl));
-            if (!"https".equalsIgnoreCase(url.getProtocol()) && !"http".equalsIgnoreCase(url.getProtocol())) {
-                log.warning("AI model base URL is not an http(s) URL");
-                throw new NotConfiguredException("AI model base URL is not configured");
-            }
-            connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestMethod("POST");
-            connection.setConnectTimeout(10000);
-            connection.setReadTimeout(60000);
-            connection.setDoOutput(true);
-            connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
-            connection.setRequestProperty("Accept", "application/json");
-            connection.setRequestProperty("Authorization", "Bearer " + key);
-
-            byte[] payload = requestBody(model.trim(), userContent(prompt, graphJson));
-            connection.setFixedLengthStreamingMode(payload.length);
-            OutputStream out = connection.getOutputStream();
-            try {
-                out.write(payload);
-            } finally {
-                out.close();
-            }
-
-            int status = connection.getResponseCode();
-            InputStream stream = status >= 200 && status < 300
-                    ? connection.getInputStream()
-                    : connection.getErrorStream();
-            // The upstream body can echo the prompt. Read it only to parse or discard it.
-            String responseBody = stream == null ? "" : readLimited(stream);
-            if (status < 200 || status >= 300) {
-                log.log(Level.WARNING, "AI model request failed, status {0}", status);
-                throw new ModelRequestException("The model request failed");
-            }
-            return messageText(responseBody);
-        } catch (NotConfiguredException e) {
-            throw e;
-        } catch (ModelRequestException e) {
-            throw e;
-        } catch (Exception e) {
-            log.log(Level.WARNING, "AI model request failed: {0}", e.getClass().getSimpleName());
-            throw new ModelRequestException("The model request failed");
-        } finally {
-            if (connection != null) {
-                connection.disconnect();
-            }
-        }
+        return fallback;
     }
 
     static String userContent(String prompt, String graphJson) {
@@ -127,7 +127,68 @@ public class LlmClient {
         return root + "/chat/completions";
     }
 
-    private static byte[] requestBody(String modelName, String content) {
+    /**
+     * A usable secret has no whitespace that could break an HTTP header.
+     * A missing or blank value is treated as not configured.
+     */
+    static String usableSecret(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        if (trimmed.isEmpty() || trimmed.length() > 4096) {
+            return null;
+        }
+        for (int i = 0; i < trimmed.length(); i++) {
+            char c = trimmed.charAt(i);
+            if (c <= ' ' || c == '\u007f') {
+                return null;
+            }
+        }
+        return trimmed;
+    }
+
+    private static String safeModel(String modelName) {
+        String trimmed = modelName.trim();
+        if (trimmed.isEmpty()
+                || trimmed.indexOf('/') >= 0
+                || trimmed.indexOf('\\') >= 0
+                || trimmed.indexOf('?') >= 0
+                || trimmed.indexOf('#') >= 0
+                || trimmed.indexOf(':') >= 0
+                || trimmed.indexOf(' ') >= 0) {
+            throw new NotConfiguredException("AI model name is not configured");
+        }
+        return trimmed;
+    }
+
+    private static Map<String, String> jsonHeaders() {
+        Map<String, String> headers = new LinkedHashMap<String, String>();
+        headers.put("Content-Type", "application/json; charset=utf-8");
+        headers.put("Accept", "application/json");
+        return headers;
+    }
+
+    private static Map<String, String> bearerHeaders(String key) {
+        Map<String, String> headers = jsonHeaders();
+        headers.put("Authorization", "Bearer " + key);
+        return headers;
+    }
+
+    private static Map<String, String> anthropicHeaders(String key) {
+        Map<String, String> headers = jsonHeaders();
+        headers.put("x-api-key", key);
+        headers.put("anthropic-version", "2023-06-01");
+        return headers;
+    }
+
+    private static Map<String, String> googleHeaders(String key) {
+        Map<String, String> headers = jsonHeaders();
+        headers.put("x-goog-api-key", key);
+        return headers;
+    }
+
+    private static byte[] openaiBody(String modelName, String content) {
         JSONObject message = new JSONObject();
         message.put("role", "user");
         message.put("content", content);
@@ -139,10 +200,37 @@ public class LlmClient {
         return payload.toString().getBytes(StandardCharsets.UTF_8);
     }
 
+    private static byte[] anthropicBody(String modelName, String content) {
+        JSONObject message = new JSONObject();
+        message.put("role", "user");
+        message.put("content", content);
+        JSONArray messages = new JSONArray();
+        messages.put(message);
+        JSONObject payload = new JSONObject();
+        payload.put("model", modelName);
+        payload.put("max_tokens", 1024);
+        payload.put("messages", messages);
+        return payload.toString().getBytes(StandardCharsets.UTF_8);
+    }
+
+    private static byte[] googleBody(String content) {
+        JSONObject part = new JSONObject();
+        part.put("text", content);
+        JSONArray parts = new JSONArray();
+        parts.put(part);
+        JSONObject contentItem = new JSONObject();
+        contentItem.put("parts", parts);
+        JSONArray contents = new JSONArray();
+        contents.put(contentItem);
+        JSONObject payload = new JSONObject();
+        payload.put("contents", contents);
+        return payload.toString().getBytes(StandardCharsets.UTF_8);
+    }
+
     private static String messageText(String responseBody) {
         try {
-            JSONObject json = new JSONObject(responseBody);
-            String text = json.getJSONArray("choices")
+            String text = new JSONObject(responseBody)
+                    .getJSONArray("choices")
                     .getJSONObject(0)
                     .getJSONObject("message")
                     .getString("content");
@@ -158,47 +246,116 @@ public class LlmClient {
         }
     }
 
-    private static String readLimited(InputStream stream) throws IOException {
+    private static String anthropicText(String responseBody) {
         try {
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
-            byte[] buffer = new byte[4096];
-            int read;
-            while ((read = stream.read(buffer)) != -1) {
-                int allowed = MAX_RESPONSE_BYTES - out.size();
-                if (allowed <= 0) {
-                    break;
-                }
-                out.write(buffer, 0, Math.min(read, allowed));
+            String text = new JSONObject(responseBody)
+                    .getJSONArray("content")
+                    .getJSONObject(0)
+                    .getString("text");
+            if (text == null) {
+                throw new ModelRequestException("The model request failed");
             }
-            return new String(out.toByteArray(), StandardCharsets.UTF_8);
-        } finally {
-            stream.close();
+            return text;
+        } catch (ModelRequestException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            log.warning("AI model response did not contain message text");
+            throw new ModelRequestException("The model request failed");
         }
     }
 
-    /**
-     * A usable secret has no whitespace that could break an HTTP header.
-     * A missing or blank value is treated as not configured.
-     */
-    private static String configuredSecret(String value) {
-        if (value == null) {
-            return null;
-        }
-        String trimmed = value.trim();
-        if (trimmed.isEmpty()) {
-            return null;
-        }
-        for (int i = 0; i < trimmed.length(); i++) {
-            char c = trimmed.charAt(i);
-            if (c <= ' ' || c == '\u007f') {
-                return null;
+    private static String googleText(String responseBody) {
+        try {
+            String text = new JSONObject(responseBody)
+                    .getJSONArray("candidates")
+                    .getJSONObject(0)
+                    .getJSONObject("content")
+                    .getJSONArray("parts")
+                    .getJSONObject(0)
+                    .getString("text");
+            if (text == null) {
+                throw new ModelRequestException("The model request failed");
             }
+            return text;
+        } catch (ModelRequestException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            log.warning("AI model response did not contain message text");
+            throw new ModelRequestException("The model request failed");
         }
-        return trimmed;
     }
 
     private static boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
+    }
+
+    private static final class HttpExchange implements Exchange {
+        @Override
+        public String post(String url, Map<String, String> headers, byte[] body) {
+            HttpURLConnection connection = null;
+            try {
+                URL target = new URL(url);
+                if (!"https".equalsIgnoreCase(target.getProtocol()) && !"http".equalsIgnoreCase(target.getProtocol())) {
+                    log.warning("AI model base URL is not an http(s) URL");
+                    throw new NotConfiguredException("AI model base URL is not configured");
+                }
+                connection = (HttpURLConnection) target.openConnection();
+                connection.setRequestMethod("POST");
+                connection.setConnectTimeout(10000);
+                connection.setReadTimeout(60000);
+                connection.setDoOutput(true);
+                for (Map.Entry<String, String> header : headers.entrySet()) {
+                    connection.setRequestProperty(header.getKey(), header.getValue());
+                }
+                connection.setFixedLengthStreamingMode(body.length);
+                OutputStream out = connection.getOutputStream();
+                try {
+                    out.write(body);
+                } finally {
+                    out.close();
+                }
+                int status = connection.getResponseCode();
+                InputStream stream = status >= 200 && status < 300
+                        ? connection.getInputStream()
+                        : connection.getErrorStream();
+                // The upstream body can echo the prompt. Read it only to parse or discard it.
+                String responseBody = stream == null ? "" : readLimited(stream);
+                if (status < 200 || status >= 300) {
+                    log.log(Level.WARNING, "AI model request failed, status {0}", status);
+                    throw new ModelRequestException("The model request failed");
+                }
+                return responseBody;
+            } catch (NotConfiguredException e) {
+                throw e;
+            } catch (ModelRequestException e) {
+                throw e;
+            } catch (Exception e) {
+                log.log(Level.WARNING, "AI model request failed: {0}", e.getClass().getSimpleName());
+                throw new ModelRequestException("The model request failed");
+            } finally {
+                if (connection != null) {
+                    connection.disconnect();
+                }
+            }
+        }
+
+        private static String readLimited(InputStream stream) throws java.io.IOException {
+            try {
+                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                byte[] buffer = new byte[4096];
+                int read;
+                while ((read = stream.read(buffer)) != -1) {
+                    int allowed = MAX_RESPONSE_BYTES - out.size();
+                    if (allowed <= 0) {
+                        break;
+                    }
+                    out.write(buffer, 0, Math.min(read, allowed));
+                }
+                return new String(out.toByteArray(), StandardCharsets.UTF_8);
+            } finally {
+                stream.close();
+            }
+        }
     }
 
     public static class NotConfiguredException extends RuntimeException {
