@@ -239,6 +239,31 @@ class ExtractorTest(unittest.TestCase):
             inbox.SEEN_PATH = old_seen
         self.assertEqual(len(calls), 1)
 
+    def test_failed_publish_is_retried(self):
+        import inbox
+
+        directory = tempfile.mkdtemp()
+        seen_path = os.path.join(directory, "seen")
+        with open(os.path.join(directory, "note.txt"), "w", encoding="utf-8") as handle:
+            handle.write("The NYSE reported unrest.")
+        old_dir, old_seen = inbox.INBOX_DIR, inbox.SEEN_PATH
+        inbox.INBOX_DIR = directory
+        inbox.SEEN_PATH = seen_path
+        calls = []
+
+        def fail(_cfg, _body):
+            raise RuntimeError("broker down")
+
+        try:
+            with self.assertRaises(RuntimeError):
+                inbox.poll_once(None, fail)
+            self.assertFalse(os.path.exists(seen_path))
+            inbox.poll_once(None, lambda _cfg, body: calls.append(body))
+        finally:
+            inbox.INBOX_DIR = old_dir
+            inbox.SEEN_PATH = old_seen
+        self.assertEqual(len(calls), 1)
+
     def test_shorter_graph_drops_old_nodes_and_edges(self):
         from scenario import build_graph, sync_actions
 

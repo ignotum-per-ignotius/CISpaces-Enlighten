@@ -62,7 +62,12 @@ def poll_forever(cfg, publish):
 
 
 def poll_once(cfg, publish):
-    """Publish each new file at most once, even if two loops call this together."""
+    """Publish each new file at most once, even if two loops call this together.
+
+    The lock is held through the broker publish. The seen stamp is written
+    only after that publish returns, so a crash before then leaves the file
+    for the next start.
+    """
     with _POLL_LOCK:
         seen = _load_seen()
         try:
@@ -86,14 +91,8 @@ def poll_once(cfg, publish):
             if body is None:
                 _remember(seen, name, stamp)
                 continue
-            # Reserve the stamp before publish so the other loop cannot send it too.
+            publish(cfg, body)
             _remember(seen, name, stamp)
-            try:
-                publish(cfg, body)
-            except Exception:
-                seen.pop(name, None)
-                _write_seen(seen)
-                raise
             _archive(path, name)
 
 
