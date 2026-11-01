@@ -1,22 +1,29 @@
 #!/usr/bin/env python3
-"""Fact-extraction bus client.
+"""Fact-extraction service for the FEWS fanout exchange.
 
-FEWS publishes vocabulary control messages to the fanout exchange
-cispaces_exchange and reads PostgreSQL database intelanalysis. The 2017
-fact-extraction app loaded its dependency parser before opening this
-consumer, and the wheels that import requires are not published. This
-process keeps that consumer contract: same database, same exchange, an
-exclusive auto-delete queue, and a process that stays up.
+FEWS publishes vocabulary control messages to ``cispaces_exchange`` and reads
+facts from the ``intelanalysis`` database. A text message on the same exchange
+is split into sentences, given a subject-relation-object triple, and stored in
+``factextract.phase1_post_db_item``, ``phase1_ext_db_item``,
+``phase1_ext_db_topic``, and ``phase1_ext_db_topic_index``.
+
+The broker is told to auto-ack, which is the 2017 consumer's ``no_ack``
+setting. FEWS publishes without publisher confirms and does not wait for a
+consumer ack. Message bodies are not written to the log.
 """
 
 import configparser
+import json
 import os
 import signal
 import sys
 import time
 
 import pika
-import psycopg2
+
+from extractor import load_nlp, message_kind, posts_from_payload
+from extractor import Lexicon
+from store import FactStore
 
 INI_PATH = os.environ.get(
     "FACT_EXTRACTION_INI", "/opt/fact-extraction/fact_extraction_app.ini"
@@ -37,18 +44,11 @@ def read_config():
     return parser
 
 
-def wait_for_database(cfg):
+def wait_for_database(store):
     last = "error"
     for _ in range(60):
         try:
-            conn = psycopg2.connect(
-                host=cfg.get("situation-assessment", "db_host"),
-                port=cfg.getint("situation-assessment", "db_port"),
-                dbname=cfg.get("situation-assessment", "db_name"),
-                user=cfg.get("situation-assessment", "db_user"),
-                password=cfg.get("situation-assessment", "db_pass"),
-                connect_timeout=5,
-            )
+            conn = store.connect()
             try:
                 cur = conn.cursor()
                 cur.execute("SELECT COUNT(*) FROM factextract.vocab_topic")
@@ -69,7 +69,32 @@ def wait_for_database(cfg):
     sys.exit(1)
 
 
-def consume(cfg):
+def remember_count(count):
+    tmp = COUNT_PATH + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as handle:
+        handle.write("%s\n" % count)
+    os.replace(tmp, COUNT_PATH)
+
+
+def handle_payload(store, lexicon_box, nlp, payload):
+    kind = message_kind(payload)
+    if kind == "vocabulary":
+        lexicon_box[0] = Lexicon.from_control(payload)
+        linked = store.reindex(lexicon_box[0])
+        log("accepted vocabulary links=%s" % linked)
+        return
+    if kind == "text":
+        posts = posts_from_payload(payload)
+        if not posts:
+            log("rejected fact-extraction message: no text")
+            return
+        written = store.ingest(posts, lexicon_box[0], nlp)
+        log("stored facts extracts=%s posts=%s" % (written, len(posts)))
+        return
+    log("rejected fact-extraction message: unknown shape")
+
+
+def consume(cfg, store, lexicon_box, nlp):
     credentials = pika.PlainCredentials(
         cfg.get("rabbitmq", "rmq_username"),
         cfg.get("rabbitmq", "rmq_password"),
@@ -107,15 +132,23 @@ def consume(cfg):
     )
     count = 0
 
-    def on_message(_channel, _method, _properties, _body):
+    def on_message(_channel, _method, properties, body):
         nonlocal count
         count += 1
-        tmp = COUNT_PATH + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as handle:
-            handle.write("%s\n" % count)
-        os.replace(tmp, COUNT_PATH)
-        # The body is a vocabulary control message. Do not log it.
-        log("received fact-extraction control message count=%s" % count)
+        remember_count(count)
+        content_type = getattr(properties, "content_type", None)
+        if content_type not in (None, "", "application/json"):
+            log("rejected fact-extraction message: unsupported content type count=%s" % count)
+            return
+        try:
+            payload = json.loads(body.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError, TypeError):
+            log("rejected fact-extraction message: invalid json count=%s" % count)
+            return
+        try:
+            handle_payload(store, lexicon_box, nlp, payload)
+        except Exception as exc:
+            log("fact-extraction message failed count=%s error=%s" % (count, type(exc).__name__))
 
     channel.basic_consume(
         queue=declared.method.queue,
@@ -140,10 +173,7 @@ def consume(cfg):
 
 
 def main():
-    log(
-        "fact-extraction NLP libraries from the 2017 installer are not in this image; "
-        "the consumer and database client are running"
-    )
+    log("fact-extraction loading %s" % "en_core_web_sm")
     cfg = read_config()
     for section, key in (
         ("situation-assessment", "db_pass"),
@@ -152,11 +182,14 @@ def main():
         if cfg.get(section, key).startswith("__CISPACES_"):
             log("fact-extraction config still has a placeholder")
             sys.exit(1)
-    wait_for_database(cfg)
+    store = FactStore(cfg)
+    wait_for_database(store)
+    lexicon_box = [store.load_lexicon()]
+    nlp = load_nlp()
     last = "error"
     for _ in range(30):
         try:
-            consume(cfg)
+            consume(cfg, store, lexicon_box, nlp)
             return
         except Exception as exc:
             last = type(exc).__name__

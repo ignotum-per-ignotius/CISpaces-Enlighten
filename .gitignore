@@ -28,8 +28,10 @@ out/*
 cispaces/*
 tools/*
 
-# Python venv
+# Python venv and bytecode from local extractor tests
 **/env/
+__pycache__/
+*.pyc
 
 # Local fact-extraction checkout. docker/fact-extraction is the Compose image.
 /fact-extraction/

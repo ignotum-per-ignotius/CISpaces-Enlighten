@@ -135,6 +135,8 @@ Source: `FEWS/src/main/java/fewsservlet/FEWSServlet.java`. Jersey package `fewss
 
 `negated` and `genuine` on a topic are integers. `-1` means unknown.
 
+Fact extraction listens on the RabbitMQ fanout `cispaces_exchange`. Vocabulary changes publish `lexicon` and `phrase_mapping`. A separate JSON text message (`text`, or a Twitter status with `text` and `id_str`) is stored as phase-1 facts those two read endpoints return. Deliveries are auto-acked. FEWS does not wait for an acknowledgement.
+
 - `GET fewsservlet/hello`
 
   Plain-text hello. No JWT.
