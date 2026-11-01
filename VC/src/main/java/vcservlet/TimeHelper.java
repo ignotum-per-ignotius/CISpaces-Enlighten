@@ -1,11 +1,12 @@
 /**
- * This class is responsible for formatting timestamp objects which will be inserted into the database.
+ * SQL timestamps for the version-control tables.
+ * Provenance timestamps are {@code utils.TimeHelper} in the common module.
  *
  * @author Yordanka Ivanova
  * @since July 2017
  */
 
-package utils;
+package vcservlet;
 
 import java.sql.Timestamp;
 import java.text.ParseException;

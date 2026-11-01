@@ -42,8 +42,8 @@ import com.hp.hpl.jena.rdf.model.ModelFactory;
 import com.hp.hpl.jena.rdf.model.RDFNode;
 import com.hp.hpl.jena.update.UpdateAction;
 
-import prov.NS;
-import prov.PatternBuilder;
+import utils.NS;
+import utils.PatternBuilder;
 
 public class ModelConnect {
 

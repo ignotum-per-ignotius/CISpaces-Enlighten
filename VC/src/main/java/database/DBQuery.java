@@ -12,7 +12,7 @@ package database;
 
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
-import utils.TimeHelper;
+import vcservlet.TimeHelper;
 
 import java.sql.SQLException;
 import java.sql.Timestamp;
