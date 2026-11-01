@@ -10,6 +10,128 @@ fi
 
 start_dir=$(pwd)
 export JAVA_HOME=${start_dir}/fact-extraction/third-party/jdk1.8.0_151
+if [ -z "${CISPACES_JWT_KEY_FILE:-}" ]; then
+    export CISPACES_JWT_KEY_FILE="${start_dir}/config/key.properties"
+fi
+if [ ! -f "${CISPACES_JWT_KEY_FILE}" ]; then
+    set +x
+    mkdir -p "$(dirname "${CISPACES_JWT_KEY_FILE}")"
+    jwt_key=$(od -An -N64 -tx1 /dev/urandom | tr -d ' \n')
+    old_umask=$(umask)
+    umask 077
+    {
+        echo "# Shared by every CISpaces service. Generated at install. Do not commit."
+        printf 'keyString=%s\n' "$jwt_key"
+    } > "${CISPACES_JWT_KEY_FILE}"
+    umask "$old_umask"
+    unset jwt_key
+    chmod 600 "${CISPACES_JWT_KEY_FILE}"
+    echo "# Wrote the shared JWT key file"
+fi
+if [ -z "${CISPACES_POSTGRES_PASSWORD:-}" ] || [ -z "${CISPACES_RABBITMQ_PASSWORD:-}" ]; then
+    echo "# Export CISPACES_POSTGRES_PASSWORD and CISPACES_RABBITMQ_PASSWORD before starting fact extraction. See config/secrets.env.example."
+fi
+context_xml="${start_dir}/tools/tomcat/conf/context.xml"
+if [ -f "$context_xml" ] && grep -q '__CISPACES_DERBY_PASSWORD__' "$context_xml"; then
+    if [ -z "${CISPACES_DERBY_PASSWORD:-}" ]; then
+        echo "# Export CISPACES_DERBY_PASSWORD before starting. Tomcat context.xml still has the Derby placeholder. The value is not printed."
+    else
+        set +x
+        derby_password_xml=$CISPACES_DERBY_PASSWORD
+        derby_password_xml=${derby_password_xml//&/&amp;}
+        derby_password_xml=${derby_password_xml//</&lt;}
+        derby_password_xml=${derby_password_xml//>/&gt;}
+        derby_password_xml=${derby_password_xml//\"/&quot;}
+        derby_password_xml=${derby_password_xml//\'/&apos;}
+        password_file=$(mktemp)
+        chmod 600 "$password_file"
+        printf '%s' "$derby_password_xml" > "$password_file"
+        unset derby_password_xml
+        context_tmp=$(mktemp)
+        chmod 600 "$context_tmp"
+        # index/substr, not gsub, so characters in the password stay literal.
+        awk -v sentinel="__CISPACES_DERBY_PASSWORD__" -v pwfile="$password_file" '
+            BEGIN {
+                getline password < pwfile
+                close(pwfile)
+            }
+            {
+                out = $0
+                slen = length(sentinel)
+                while ((i = index(out, sentinel)) > 0) {
+                    out = substr(out, 1, i - 1) password substr(out, i + slen)
+                }
+                print out
+            }
+        ' "$context_xml" > "$context_tmp"
+        mv "$context_tmp" "$context_xml"
+        # A cross-filesystem mv keeps the existing mode. Packaged copies are
+        # often 644, so lock the file after the password is written.
+        chmod 600 "$context_xml"
+        rm -f "$password_file"
+        unset password_file
+    fi
+fi
+apply_fact_extraction_db_pass() {
+    set +x
+    local root="$1"
+    local ini password_file ini_tmp warned
+    warned=0
+    if [ ! -d "$root" ]; then
+        return 0
+    fi
+    while IFS= read -r ini; do
+        if [ ! -f "$ini" ] || ! grep -q '__CISPACES_POSTGRES_PASSWORD__' "$ini"; then
+            continue
+        fi
+        if [ -z "${CISPACES_POSTGRES_PASSWORD:-}" ]; then
+            if [ "$warned" -eq 0 ]; then
+                echo "# Export CISPACES_POSTGRES_PASSWORD before starting. fact_extraction_app.ini still has the PostgreSQL placeholder. The value is not printed."
+                warned=1
+            fi
+            continue
+        fi
+        case "${CISPACES_POSTGRES_PASSWORD}" in
+            *$'\n'*|*$'\r'*)
+                if [ "$warned" -eq 0 ]; then
+                    echo "# CISPACES_POSTGRES_PASSWORD contains a newline. fact_extraction_app.ini was left unchanged. The value is not printed."
+                    warned=1
+                fi
+                continue
+                ;;
+        esac
+        password_file=$(mktemp)
+        chmod 600 "$password_file"
+        printf '%s' "$CISPACES_POSTGRES_PASSWORD" > "$password_file"
+        ini_tmp=$(mktemp)
+        chmod 600 "$ini_tmp"
+        # Build the line in a prefix that is not scanned again, so a value
+        # containing the placeholder stays literal.
+        awk -v sentinel="__CISPACES_POSTGRES_PASSWORD__" -v pwfile="$password_file" '
+            BEGIN {
+                getline password < pwfile
+                close(pwfile)
+            }
+            {
+                rest = $0
+                prefix = ""
+                slen = length(sentinel)
+                while ((i = index(rest, sentinel)) > 0) {
+                    prefix = prefix substr(rest, 1, i - 1) password
+                    rest = substr(rest, i + slen)
+                }
+                print prefix rest
+            }
+        ' "$ini" > "$ini_tmp"
+        mv "$ini_tmp" "$ini"
+        # Packaged copies are often mode 644. Do not put that mode back
+        # after the password is written.
+        chmod 600 "$ini"
+        rm -f "$password_file"
+        unset password_file
+    done < <(find "$root" -type f -name fact_extraction_app.ini 2>/dev/null)
+}
+apply_fact_extraction_db_pass "$start_dir"
 
 echo "### - Starting CISPaces "
 

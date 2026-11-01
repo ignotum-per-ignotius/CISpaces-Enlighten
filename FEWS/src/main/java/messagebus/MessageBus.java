@@ -52,11 +52,15 @@ public class MessageBus {
             HOSTNAME = prop.getProperty("hostname", null);
             EXCHANGE = prop.getProperty("exchange", null);
             USERNAME = prop.getProperty("username", null);
-            final String password = prop.getProperty("password", null);
+            final String password = System.getenv("CISPACES_RABBITMQ_PASSWORD");
 
             if (HOSTNAME != null) connectionFactory.setHost(HOSTNAME);
             if (USERNAME != null) connectionFactory.setUsername(USERNAME);
-            if (password != null) connectionFactory.setPassword(password);
+            if (password == null || password.isEmpty()) {
+                log.severe("#### CISPACES_RABBITMQ_PASSWORD is not set");
+            } else {
+                connectionFactory.setPassword(password);
+            }
 
             if (input != null) {
                 try {

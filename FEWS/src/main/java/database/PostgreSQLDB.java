@@ -45,10 +45,15 @@ public class PostgreSQLDB {
                     "://" + prop.getProperty("hostname") +
                     ":" + prop.getProperty("port") +
                     "/" + prop.getProperty("database");
+            String password = System.getenv("CISPACES_POSTGRES_PASSWORD");
+            if (password == null || password.isEmpty()) {
+                log.severe("#### CISPACES_POSTGRES_PASSWORD is not set");
+                return false;
+            }
             conn = DriverManager.getConnection(
                     url,
                     prop.getProperty("user"),
-                    prop.getProperty("password")
+                    password
             );
 
             log.info("#### Read Postgresql config from file");

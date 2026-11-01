@@ -29,10 +29,6 @@
       <param-value>1</param-value>
     </init-param>
     <init-param>
-      <param-name>password</param-name>
-      <param-value>passw0rd</param-value>
-    </init-param>
-    <init-param>
       <param-name>user</param-name>
       <param-value>gaiandb</param-value>
     </init-param>
