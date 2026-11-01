@@ -1,300 +1,211 @@
 # CISpaces Web Service Calls
 
-## VC web service
+Paths below are the ones the servlets on this tree actually register. The context path is the war `finalName`. Commented-out methods are not routes.
 
-Handles the version control of the graph analysis.
+## VC
 
-There is a  ``` HTTP_requests_inputs_outputs.pdf ``` file in docs folder that gives information about different HTTP request made by different web services.
+Source: `VC/src/main/java/vcservlet/VCServlet.java`. Jersey package `vcservlet`, mapped to `/rest/*` in `VC/WebContent/WEB-INF/web.xml`.
 
-Source file: ``` VC/src/main/java/vcservlet/VCServlet.java```
+`POST VC/rest/getAnalysis` is commented out and is not served. There is no `browseAnalysis` route. `GET VC/rest/analysis/{analysisID}/export` is commented out and is not served.
 
+- `GET VC/rest/getInfo`
 
-- VC/rest/getInfo
+  Returns the text `Hello Jersey`.
 
- Shows the message ``` Hello Jersey``` the web service is running successfully.
+- `GET VC/rest/history`
 
+  Requires a JWT. Graph id is the `graph_id` cookie. Returns the saved history for that analysis as JSON.
 
-- VC/rest/user/add
+- `GET VC/rest/analyses/user/{userID}/meta`
 
-Add a user with the supplied properties
+  Requires a JWT. The caller must be `{userID}`. Returns a JSON array of graph metadata for that user.
 
-@param userData JSON String of form ```{"username":"Test user","password":"password","affiliation":"None"}```
+- `GET VC/rest/analysis/{graphID}/meta`
 
+  Requires a JWT. Returns JSON metadata for one graph.
 
-- VC/rest/login
+- `GET VC/rest/analysis/{graphID}`
 
- Handles the login request. Checks username and password
+  Requires a JWT. Returns the graph JSON (metadata, nodes, and edges).
 
-@param userData JSON String of form {"username":"Test user","password":"password"}
+- `DELETE VC/rest/analysis/{graphID}`
 
-@return a response indicating whether the user has been validated
+  Requires a JWT. The caller must own the graph. Deletes that analysis.
 
+- `POST VC/rest/login`
 
-- VC/rest/browseAnalysis (to do)
- 
- This shows all the analysis for users to browse in the browse box.
+  JSON body `{"username":"...","password":"..."}`. On success, plain-text user info and an `Authorization: Bearer` token.
 
- @param userId- userid is needed to find all the analysis that user created and shared with him/her.
+- `POST VC/rest/user/add`
 
- @return json response of graphId for all the analysis
+  Requires a JWT. JSON body `{"username":"...","password":"...","affiliation":"..."}`.
 
+- `POST VC/rest/new`
 
-- VC/rest/getAnalysis
+  Requires a JWT. JSON body with the new graph, including `userID`. The caller must be that user.
 
- Gets the last analysis user worked on and loads the analysis to workbox. This will be modified to load the analysis user chooses from the browse box.
+- `POST VC/rest/save`
 
- @param userID a user id coming from the client
+  Requires a JWT. JSON body with `graphID` (caller must own it), the user id, and the title. Saves a history version.
 
- To do- @param graphID a graph id is needed to load the analysis user has chosen
+- `POST VC/rest/edge/{edgeid}`
 
- @return either a json representing the latest analysis this user has worked on, or a new graph id for starting a new analysis.
+  Requires a JWT. JSON body for a new edge.
 
- To do- Return the json of the analysis used has chosen to view.
+- `PUT VC/rest/edge/{edgeid}`
 
- ``` JSON response:
- {"nodes":[{"input":"PREF","eval":"N\/A","dtg":"2017-09-26 13:49:28.0","islocked":"false","text":"PREF","source":"user","cmt":"N\/A","type":"P","annot":"N\/A","graphID":"de9f57b3-3183-43ec-a34c-10eb33158081","nodeID":"db66b909-b866-4479-ca8c-db575c043405","uncert":"Confirmed"},{"input":"INFO","eval":"N\/A","dtg":"2017-09-26 13:49:11.0","islocked":"false","text":"INFO","source":"user","cmt":"N\/A","type":"I","annot":"N\/A","graphID":"de9f57b3-3183-43ec-a34c-10eb33158081","nodeID":"f4f7285b-fabe-42a2-9238-4703e1072d27","uncert":"Confirmed"},{"input":"PRO","eval":"N\/A","dtg":"2017-09-26 13:49:12.0","islocked":"false","text":"PRO","source":"user","cmt":"N\/A","type":"RA","annot":"N\/A","graphID":"de9f57b3-3183-43ec-a34c-10eb33158081","nodeID":"39a08ad2-8dd7-4940-c067-45a4dd8f7efe","uncert":"Confirmed"}],"edges":[{"edgeID":"3af37733-4034-401f-930d-0544e93e4956","islocked":"false","source":"39a08ad2-8dd7-4940-c067-45a4dd8f7efe","formedgeid":"null","graphID":"de9f57b3-3183-43ec-a34c-10eb33158081","target":"db66b909-b866-4479-ca8c-db575c043405"},{"edgeID":"7f8c8fac-c9e4-4bb7-935b-b31233f10a3c","islocked":"false","source":"f4f7285b-fabe-42a2-9238-4703e1072d27","formedgeid":"null","graphID":"de9f57b3-3183-43ec-a34c-10eb33158081","target":"39a08ad2-8dd7-4940-c067-45a4dd8f7efe"}]}
- 
- ```
+  Requires a JWT. JSON body for an edge update.
 
+- `DELETE VC/rest/edge/{edgeid}`
 
-- VC/rest/new
+  Requires a JWT. Deletes the edge. Returns a boolean.
 
-  Makes a new graph request
+- `POST VC/rest/node/{nodeid}`
 
-  @param graph a json containing the basic information for a new graph
-  
-  @return a response indicating whether the graph has been inserted into the database
+  Requires a JWT. JSON body for a new node.
 
+- `PUT VC/rest/node/{nodeid}`
 
-- VC/rest/edge/{edgeid}:
+  Requires a JWT. JSON body for a node update.
 
- ``` POST ``` request adds edge.
+- `DELETE VC/rest/node/{nodeid}`
 
- ``` DELETE ``` request deletes edge.
+  Requires a JWT. Deletes the node. Returns a boolean.
 
- @param edge the JSON for an edge coming from the front-end upon the creation of a new edge
- 
- @return a response indicating whether the JSON has been processed and the relevant bits put into the database
+- `POST VC/rest/updateAnalysis`
 
+  Requires a JWT. JSON body of a history snapshot. `graphID` must be a graph the caller owns, and the embedded node and edge records must use that same graph id.
 
-- VC/rest/node/{nodeid}
+## ERS
 
- ``` POST``` request adds node.
- 
- ``` DELETE``` request deletes node.
+Source: `ers/src/ers/ERSServlet.java`. Jersey package `ers`, mapped to `/rest/*`.
 
- @param json the JSON for a node coming from the front-end upon the creation of a new node
- 
- @return a response indicating whether the JSON has been processed and the relevant bits put into the database
+There is no `action: nlg`. Anything other than `eval` is rejected with "action not recognised". Report text is the separate NLG service below.
 
+- `GET ers/rest/WriteRules`
 
-- VC/rest/save
+  HTML hello page.
 
- Saves the current graph on workbox
+- `POST ers/rest/WriteRules`
 
- @param graphInfo a json containing the graph id, the creator of the analysis' id and the title of the analysis
- 
- @return a response indicating whether the analysis has been saved
+  Requires a JWT. JSON body must include `action` and, for `eval`, `graph` (nodes and edges). `action` must be `eval`. Returns the evaluation JSON, or a JSON object with `fail` and `cause`.
 
+## NLG
 
-- VC/rest/history
+Source: `nlg/src/main/java/org/cispaces/nlg/NLG.java`. Jersey package `org.cispaces.nlg`, mapped to `/rest/*`.
 
-  Gets all the version of the graph using Graphid from history table. It's sorted from newer version to older version. 
+- `POST nlg/rest/NLG`
 
-  @param graphID a graph id
+  Requires a JWT. Body is the graph text passed to `ExtensionsBulletPoints`. Response is `text/plain`.
 
-  @return all saved variations of an analysis which can be imported into the work box
+## FEWS
 
+Source: `FEWS/src/main/java/fewsservlet/FEWSServlet.java`. Jersey package `fewsservlet`, mapped to `/*` (there is no `/rest` prefix). War name is `fewsservlet`.
 
-- VC/rest/updateAnalysis
+`negated` and `genuine` on a topic are integers. `-1` means unknown.
 
- Update the analysis after a history is imported and saved as the current version.
+- `GET fewsservlet/hello`
 
+  Plain-text hello. No JWT.
 
-## ERS web Service
+- `POST fewsservlet/tweets`
 
-This web services uses the NLG to do the entity reasoning.
+  Requires a JWT. JSON array of topics, each with `name`, `negated`, and `genuine`. Returns a JSON array of tweets (`id`, `extract`, `uri`, `text`, `created`).
 
-There is a ``` ersdoc.txt ``` in the ers folder that gives details of JSON request and response made.
+- `GET fewsservlet/topics`
 
-Source file: ``` ers/src/ers/ERSServlet.java```
-
-- ers/rest/WriteRules
+  Requires a JWT. JSON array of topics.
 
- This web service performs entity reasoning to the graph and returns the claims made by the reasoner.
- 
- If there is an error in the graph structure, it returns an error response.
+- `GET fewsservlet/vocab`
 
- @param json of graph to analyse (nodes and edges)
+  Requires a JWT. JSON array of vocabulary topics (`topic`, `schema`, `keywords`).
 
- @param action: eval evaluates the graph; action: nlg generates the report
+- `GET fewsservlet/vocab/{vocabTopic}`
 
- @return for action eval: list of Problems of badly formed links (PROBS), list of evaluation for nodes  (COLORS), if uncertainty also a list of assignment is shown or an error message.
+  Requires a JWT. One vocabulary topic, or 404.
 
- @return for action nlg: NLG text for the report
+- `POST fewsservlet/vocab/{vocabTopic}/schema/{vocabSchema}`
 
-## FEWS Web Service
+  Requires a JWT. Creates that vocabulary topic. 409 if the name already exists.
 
-This web service handles interaction with the Fact-Extraction service to include social media reports in an analysis.
+- `POST fewsservlet/vocab/{vocabTopic}/keywords/{vocabKeyword}`
 
-Source file: ``` FEWS/src/main/java/fewsservlet/FEWSServlet.java ```
+  Requires a JWT. Adds a keyword and asks fact-extraction to refresh. 404 if the topic is missing, 409 if the keyword exists.
 
-- fewsservlet/hello
+- `DELETE fewsservlet/vocab/{vocabTopic}`
 
-  Say hello to the world to check the service is running correctly.
+  Requires a JWT. Deletes the topic and refreshes fact-extraction.
 
-- fewsservlet/tweets
+- `DELETE fewsservlet/vocab/{vocabTopic}/keywords/{vocabKeyword}`
 
-  ```POST``` Return a list of Tweets referring to a Topic.
-  
-  Request must contain the JSON representation of a Topic in its body.
-  The 'negated' and 'genuine' properties are boolean encoded as integers where -1 represents NULL/Unknown.
- 
-  ```
-  {
-    "name": "topic name",
-    "negated": -1,
-    "genuine": 0
-  }
-  ```
- 
-  Returns a list of Tweets in JSON representation. e.g.:
+  Requires a JWT. Deletes that keyword and refreshes fact-extraction.
 
-  ```
-   [
-     {
-       "id": 11,
-       "extract": "text extract of Tweet",
-       "uri": "Twitter URI"
-     },
-     {
-       "id": 23,
-       "extract": "another text extract of Tweet",
-       "uri": "another Twitter URI"
-     },
-     ...
-   ]
-   ```
-    
-- fewsservlet/topics
+## PROVSIMP
 
-  ```GET``` a list of all Topics present in the database.
-  
-  Returns all Topics, including combinations of 'negated' and 'genuine'.
-  The 'negated' and 'genuine' properties are boolean encoded as integers where -1 represents NULL/Unknown.
-  
-  i.e. a Topic name may appear twice with a different value of 'negated'
+Source: `PROVSIMP/src/provsimp/ProvSimpServlet.java`, actions in `ProvForkControl`. Jersey package `provsimp`, mapped to `/rest/*`.
 
-  Topics are returned in JSON representation. e.g.:
+- `GET PROVSIMP/rest/ProcProv`
 
-  ```
-  [
-    {
-      "name": "topic a",
-      "negated": 1,
-      "genuine": -1
-    },
-    {
-      "name": "topic b",
-      "negated": -1,
-      "genuine": 1
-    },
-    ...
-  ]
-  ```
-  
-- fewsservlet/vocab
+  HTML hello page.
 
-  Manage the vocabulary used by the fact-extraction engine to parse Tweets.
-  Vocabulary is a list of VocabularyTopics (similar to Topics, see docstrings).
-  A VocabularyTopic has: 
-    - name - by convention lowercase with underscores
-    - schema - the semantic type of the topic (e.g. "building"), default is "topic"
-    - keywords - list of keywords, synonyms to search for in Tweets
-        (e.g. topic "wall_street" may have "wall st" as a keyword)
+- `POST PROVSIMP/rest/ProcProv`
 
-  ```GET``` the current full vocabulary of the fact-extraction engine (state is managed by FEWS)
- 
-  ```POST``` add a topic for fact-extraction to index.  Accepts a single vocab topic in JSON form.
-  This sends a message to fact-extraction to recompute the index and add new topics to the database.
-  
+  Requires a JWT. JSON body with an `action` field. Handled values:
 
-## PROVSIMP Web Service
+  - `addnodes` — `user`, and `nodes` keyed by node id
+  - `save` — `user`, `nodes`
+  - `load` — `prov`, `nodes`
+  - `copynode` — `from`, `to`
+  - `getnode` — `user`, `nodeID`, `obf`
+  - `getpaths` — `user`, `nodeID`, `obf`
+  - `getpathnodes` — `user`, `nodeID`, `pathID`
+  - `getprovelems` — `user`, `nodes`, `obf`
+  - `getprefnodes` — `user`, `obf`, `graph`, `elements`
+  - `loadpartpref` — accepted, and the handler returns null
 
-This web service keeps the provenance data for the analysis.
+  There is no `addnode` action.
 
-This web service is not called by VC web service, so it is not clear how the request and response are being made by it.
+## provgraphs
 
-There is a ``` provsimpdoc.txt``` in the PROVSIMP folder that gives details of JSON request and response made.
+Source: `provgraphs/src/plots/PlotProvServlet.java`, mapped in `provgraphs/WebContent/WEB-INF/web.xml` to both `/Prov` and `/PlotProvServlet`. The commented `byloc`, `byday`, `byquest`, and `byans` actions are not implemented.
 
-Source file: ``` PROVSIMP/src/provsimp/ProvSimpServlet.java ```
+- `GET` or `POST provgraphs/Prov?action=printprov&json=...`
+- `GET` or `POST provgraphs/PlotProvServlet?action=printprov&json=...`
 
-- provsimp/rest/ProcProv
+  `json` is the node-provenance JSON. The response is `image/png` when a graph file is produced. `web.xml` names `filters.JWTTokenNeededFilter` on both patterns. The servlet class does not read a token itself.
 
-This web service saves the graph and all the proveneance data as RDF in the database. This web service has following actions
+## info
 
-1. action: addnode - Adds the provenance of the node into the provenance table.
+Source: `info/src/info/INFOServlet.java`, `INFInputServlet.java`, `InfoServHttp.java`, and `InfoServQueryHttp.java`. Jersey package `info`, mapped to `/rest/*`. The two `HttpServlet` classes are also mapped by `@WebServlet`.
 
-  @param nodeid, text, source, datetime group and stream
+- `GET info/rest/GetInfo`
 
-  @return success or fail message
+  HTML hello page.
 
-2. action: save - To export the provenance of the node in a text file
+- `POST info/rest/GetInfo`
 
-   @param nodeid, userid to find the provenance of the node
+  JSON body. Reads the info service and returns JSON.
 
-   @return provenamnce data
+- `GET info/rest/PostInfo`
 
-3. action: load - To import provenance data from the text file
+  HTML hello page.
 
-   @param node_data and provenance data in json format
+- `POST info/rest/PostInfo`
 
-   @return success or fail response
+  JSON body posted into the info store. Returns JSON.
 
-4. action: copynode - duplicated the node provenance data with a different id
+- `GET info/InfoServHttp`
 
-   @param from(nodeid) and to(nodeid)
+  Writes `Served at GET:` plus the context path.
 
-   @return success or fail response
+- `POST info/InfoServHttp`
 
-5. action: getnode - gets the provenance of the node
+  Form parameters `dest`, `stream`, `text`, `source`, `dids`, and `lprov`.
 
-   @param userid, nodeid
+- `GET info/InfoServQueryHttp?action=death|trespass|others`
 
-   @return provenance data of the node 
+  `dest` is also read. `death`, `trespass`, and `others` are the only actions implemented. `byloc`, `byday`, `byquest`, and `byans` appear only in a comment.
 
+- `POST info/InfoServQueryHttp`
 
-
-## PROVPLOT Web Service
-
-Provplot web service generates the provenance image from the provplot web service provenance data. 
-
-This web service is not implemented yet. To do - add the code to the current cispaces.
-
-There is a ``` provgraphsdoc.txt ``` in the provplot folder that gives details of JSON request and response made.
-
-- provgraphs/Prov?action=printprov&json=JSON
-
-Source file: ``` provgraphs/src/plots/PlotProvServlet.java ```
-
-@param json of the node provenance
-
-@retun png of the provenance graph
-
-## Info Web Service
-
-Info web service used to handle the log in feature. Now, this is done by the VC web service.
-
-There is a ``` infodoc.txt``` in the info folder that gives details of JSON request and response made.
-
-- info/rest/PostInfo
-
-Source file: ``` info/src/info/INFInputServlet.java```
-
-This used to creates the graph and tracks provenance of the graph.
-
-- info/rest/GetInfo
-
-Source file: ``` info/src/info/INFOServlet.java```
-
-A request is made with username, password and affiliation. True or false response is made if it is successful or not.
+  Writes `Served at POST:` plus the context path. It does not run a query.

@@ -7,7 +7,7 @@
     <packaging>jar</packaging>
     <version>1.0-SNAPSHOT</version>
     <name>common</name>
-    <description>Shared database, JSON, and JWT helpers for the CISpaces services.</description>
+    <description>Shared database, JSON, JWT, and provenance helpers for the CISpaces services.</description>
 
     <build>
         <plugins>
@@ -28,6 +28,11 @@
             <groupId>com.google.code.gson</groupId>
             <artifactId>gson</artifactId>
             <version>2.8.1</version>
+        </dependency>
+        <dependency>
+            <groupId>joda-time</groupId>
+            <artifactId>joda-time</artifactId>
+            <version>2.9.9</version>
         </dependency>
         <dependency>
             <groupId>io.jsonwebtoken</groupId>

@@ -37,8 +37,8 @@ import com.hp.hpl.jena.rdf.model.ModelExtract;
 import com.hp.hpl.jena.rdf.model.Resource;
 import com.hp.hpl.jena.rdf.model.StatementTripleBoundary;
 
-import prov.NS;
-import prov.PatternBuilder;
+import utils.NS;
+import utils.PatternBuilder;
 import prov.TimeExtender;
 import utils.JsonHelper;
 

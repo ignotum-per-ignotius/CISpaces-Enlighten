@@ -1,4 +1,3 @@
-
 /******************************************************************************
  * This research was sponsored by the U.S. Army Research Laboratory and the
  * U.K. Ministry of Defence under the Biennial Program Plane 2013 (BPP13),
@@ -7,16 +6,16 @@
  * reprints for Government purposes notwithstanding any copyright notation
  * hereon.
  * **************************************************************************
- * 
- * 
- * 
- * @author      Alice Toniolo  
- * @version     1.0  
- * @since 		October 2014           
- *   
+ *
+ *
+ *
+ * @author      Alice Toniolo
+ * @version     1.0
+ * @since       September 2014
+ *
  */
 
-package provservice;
+package utils;
 
 public class NS {
 

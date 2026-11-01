@@ -8,9 +8,8 @@ import java.util.UUID;
 import com.hp.hpl.jena.ontology.OntModel;
 import com.hp.hpl.jena.rdf.model.Model;
 
-import prov.PatternBuilder;
- 
-import prov.TimeHelper;
+import utils.PatternBuilder;
+import utils.TimeHelper;
 import utils.JsonHelper;
 
 public class runmain {
