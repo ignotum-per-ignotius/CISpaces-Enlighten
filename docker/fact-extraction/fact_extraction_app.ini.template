@@ -1,0 +1,20 @@
+# Placeholders are filled at start from the environment. This file is not a secret.
+[situation-assessment]
+db_user=intelanalysis
+db_pass=__CISPACES_POSTGRES_PASSWORD__
+db_host=127.0.0.1
+db_port=5432
+db_name=intelanalysis
+db_schema=factextract
+
+[rabbitmq]
+rmq_host=127.0.0.1
+rmq_port=5672
+rmq_username=intelanalysis
+rmq_password=__CISPACES_RABBITMQ_PASSWORD__
+rmq_queue_name=
+rmq_exclusive_queue=True
+rmq_auto_delete_queue=True
+rmq_exchange_type=fanout
+rmq_exchange_name=cispaces_exchange
+rmq_routing=cispaces_routing
