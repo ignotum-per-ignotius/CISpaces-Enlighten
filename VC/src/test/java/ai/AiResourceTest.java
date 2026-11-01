@@ -46,6 +46,34 @@ public class AiResourceTest {
     }
 
     @Test
+    public void slashModelIdIsSentInTheJsonBody() {
+        RecordingExchange exchange = new RecordingExchange(
+                "{\"choices\":[{\"message\":{\"content\":\"from-proxy\"}}]}");
+        AiResource resource = new AiResource(
+                new LlmClient("https://proxy.example/v1", "org/model-name", "test-key", exchange));
+
+        Response response = resource.complete("{\"prompt\":\"hello\"}");
+
+        assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
+        assertEquals("from-proxy", new JSONObject(response.getEntity().toString()).getString("text"));
+        assertEquals("https://proxy.example/v1/chat/completions", exchange.url);
+        assertFalse(exchange.url.contains("org/model-name"));
+        assertEquals("org/model-name", new JSONObject(new String(exchange.body, StandardCharsets.UTF_8)).getString("model"));
+    }
+
+    @Test
+    public void slashModelIdIsRejectedWhenItWouldChangeTheUrlPath() {
+        RecordingExchange exchange = new RecordingExchange("{}");
+        AiResource resource = new AiResource(new LlmClient(null, "org/model-name", "test-key", exchange));
+
+        Response response = resource.complete("{\"prompt\":\"hello\",\"provider\":\"google\"}");
+
+        assertEquals(Response.Status.SERVICE_UNAVAILABLE.getStatusCode(), response.getStatus());
+        assertEquals("AI model name is not configured", new JSONObject(response.getEntity().toString()).getString("error"));
+        assertNull(exchange.url);
+    }
+
+    @Test
     public void stubbedClientReturnsStubText() {
         AiResource resource = new AiResource(new LlmClient("https://example.invalid/v1", "test-model", "test-key") {
             @Override

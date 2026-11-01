@@ -103,7 +103,7 @@ No vendor key is built into the source. A key is never written into the reposito
   Environment variables:
 
   - `CISPACES_AI_BASE_URL` — optional override of the provider endpoint. When set, the call uses the OpenAI-compatible protocol
-  - `CISPACES_AI_MODEL` — optional model name override
+  - `CISPACES_AI_MODEL` — optional model name override. A slash is allowed when the name is sent only in the JSON body. Characters that would change the Google request path, or inject a header, are rejected
   - `CISPACES_AI_API_KEY` — optional bearer key that overrides the stored provider key
   - `CISPACES_AI_KEY_DIR` — optional directory for the `{provider}.key` files
 

@@ -73,7 +73,7 @@ public class LlmClient {
         }
         String content = userContent(prompt, graphJson);
         if (!isBlank(baseUrl)) {
-            String modelName = modelName(provider);
+            String modelName = modelName(provider, false);
             return messageText(exchange.post(
                     chatCompletionsUrl(baseUrl),
                     bearerHeaders(key),
@@ -83,28 +83,33 @@ public class LlmClient {
             log.warning(MISSING_BASE_URL_MESSAGE);
             throw new NotConfiguredException(MISSING_BASE_URL_MESSAGE);
         }
-        String modelName = modelName(provider);
         if (ProviderKeyStore.ANTHROPIC.equals(provider)) {
+            String modelName = modelName(provider, false);
             return anthropicText(exchange.post(
                     ProviderKeyStore.defaultBaseUrl(provider) + "/v1/messages",
                     anthropicHeaders(key),
                     anthropicBody(modelName, content)));
         }
         if (ProviderKeyStore.GOOGLE.equals(provider)) {
+            String modelName = modelName(provider, true);
             return googleText(exchange.post(
                     ProviderKeyStore.defaultBaseUrl(provider) + "/models/" + modelName + ":generateContent",
                     googleHeaders(key),
                     googleBody(content)));
         }
+        String modelName = modelName(provider, false);
         return messageText(exchange.post(
                 chatCompletionsUrl(ProviderKeyStore.defaultBaseUrl(ProviderKeyStore.OPENAI)),
                 bearerHeaders(key),
                 openaiBody(modelName, content)));
     }
 
-    private String modelName(String provider) {
+    /**
+     * @param inUrlPath true only when the name is copied into the request path
+     */
+    private String modelName(String provider, boolean inUrlPath) {
         if (!isBlank(model)) {
-            return safeModel(model);
+            return safeModel(model, inUrlPath);
         }
         String fallback = ProviderKeyStore.defaultModel(provider);
         if (fallback == null) {
@@ -150,16 +155,24 @@ public class LlmClient {
         return trimmed;
     }
 
-    private static String safeModel(String modelName) {
+    /**
+     * Proxy ids such as {@code org/model} are valid in a JSON body. A name copied
+     * into a URL path must not add a segment, query, or fragment. Control
+     * characters are rejected in both cases so the name cannot inject a header.
+     */
+    private static String safeModel(String modelName, boolean inUrlPath) {
         String trimmed = modelName.trim();
-        if (trimmed.isEmpty()
-                || trimmed.indexOf('/') >= 0
-                || trimmed.indexOf('\\') >= 0
-                || trimmed.indexOf('?') >= 0
-                || trimmed.indexOf('#') >= 0
-                || trimmed.indexOf(':') >= 0
-                || trimmed.indexOf(' ') >= 0) {
+        if (trimmed.isEmpty()) {
             throw new NotConfiguredException("AI model name is not configured");
+        }
+        for (int i = 0; i < trimmed.length(); i++) {
+            char c = trimmed.charAt(i);
+            if (c < ' ' || c == '\u007f') {
+                throw new NotConfiguredException("AI model name is not configured");
+            }
+            if (inUrlPath && (c == '/' || c == '\\' || c == '?' || c == '#' || c == ':' || c == '%' || c == ' ')) {
+                throw new NotConfiguredException("AI model name is not configured");
+            }
         }
         return trimmed;
     }
