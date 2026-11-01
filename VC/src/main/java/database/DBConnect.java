@@ -244,13 +244,13 @@ public class DBConnect {
 		return executeUpdate(updateStatement, values);
 	}
 
-	public synchronized ArrayList<HashMap<String,Object>> executeQuery(String sql, Object... params) {
+	public synchronized ArrayList<HashMap<String,Object>> executeQuery(String sql, Object... params) throws SQLException {
 		ArrayList<HashMap<String,Object>> result = new ArrayList<HashMap<String,Object>>();
 		PreparedStatement ps = null;
 		ResultSet rs = null;
 		try {
-			if (!connect()) {
-				return result;
+			if (!connect() || dbCon == null) {
+				throw new SQLException("FAIL DB CONNECTION");
 			}
 			ps = dbCon.prepareStatement(sql);
 			bind(ps, params);
@@ -258,7 +258,7 @@ public class DBConnect {
 			result = convertResultSetToList(rs);
 		} catch (SQLException e) {
 			log.log(Level.SEVERE, "FAIL DB QUERY", e);
-			result = new ArrayList<HashMap<String,Object>>();
+			throw e;
 		} finally {
 			if (rs != null) {
 				try {

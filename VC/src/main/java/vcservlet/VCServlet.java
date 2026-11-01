@@ -530,7 +530,13 @@ public class VCServlet {
         log.log(Level.INFO, "*** VERSION CONTROL SERVICE - Delete Edge Request ***");
 
         DBQuery dbQuery = new DBQuery();
-        requireGraphOwner(dbQuery.graphIdOfEdge(edgeid));
+        String graphId;
+        try {
+            graphId = dbQuery.graphIdOfEdge(edgeid);
+        } catch (SQLException e) {
+            throw databaseError(e);
+        }
+        requireGraphOwner(graphId);
         boolean isDeleted = dbQuery.deleteEdge(edgeid);
 
         log.log(Level.INFO,"*** VERSION CONTROL SERVICE - Delete Edge Request Handled ***");
@@ -552,7 +558,13 @@ public class VCServlet {
         log.log(Level.INFO, "*** VERSION CONTROL SERVICE - Delete Node Request ***");
 
         DBQuery dbQuery = new DBQuery();
-        requireGraphOwner(dbQuery.graphIdOfNode(nodeid));
+        String graphId;
+        try {
+            graphId = dbQuery.graphIdOfNode(nodeid);
+        } catch (SQLException e) {
+            throw databaseError(e);
+        }
+        requireGraphOwner(graphId);
         boolean isDelelted = dbQuery.deleteNode(nodeid);
 
         log.log(Level.INFO,"*** VERSION CONTROL SERVICE - Delete Node Request Handled ***");
@@ -621,7 +633,12 @@ public class VCServlet {
         if (body != null) {
             return Response.ok().entity(body).build();
         }
-        String owner = new DBQuery().getGraphOwner(graphID);
+        String owner;
+        try {
+            owner = new DBQuery().getGraphOwner(graphID);
+        } catch (SQLException e) {
+            throw databaseError(e);
+        }
         if (owner == null || owner.trim().isEmpty()) {
             return Response.status(Response.Status.NOT_FOUND).build();
         }
@@ -633,7 +650,12 @@ public class VCServlet {
         if (caller == null || caller.isEmpty()) {
             throw new WebApplicationException(Response.Status.UNAUTHORIZED);
         }
-        String owner = new DBQuery().getGraphOwner(graphId);
+        String owner;
+        try {
+            owner = new DBQuery().getGraphOwner(graphId);
+        } catch (SQLException e) {
+            throw databaseError(e);
+        }
         if (owner == null || owner.trim().isEmpty()) {
             throw new WebApplicationException(Response.Status.NOT_FOUND);
         }
@@ -644,7 +666,12 @@ public class VCServlet {
 
     private void requireNodeMutation(String json) {
         requireGraphOwner(stringField(json, "graphID"));
-        String existingGraph = new DBQuery().graphIdOfNode(stringField(json, "nodeID"));
+        String existingGraph;
+        try {
+            existingGraph = new DBQuery().graphIdOfNode(stringField(json, "nodeID"));
+        } catch (SQLException e) {
+            throw databaseError(e);
+        }
         if (existingGraph != null) {
             requireGraphOwner(existingGraph);
         }
@@ -652,7 +679,12 @@ public class VCServlet {
 
     private void requireEdgeMutation(String json) {
         requireGraphOwner(stringField(json, "graphID"));
-        String existingGraph = new DBQuery().graphIdOfEdge(stringField(json, "edgeID"));
+        String existingGraph;
+        try {
+            existingGraph = new DBQuery().graphIdOfEdge(stringField(json, "edgeID"));
+        } catch (SQLException e) {
+            throw databaseError(e);
+        }
         if (existingGraph != null) {
             requireGraphOwner(existingGraph);
         }

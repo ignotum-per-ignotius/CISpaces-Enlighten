@@ -215,7 +215,7 @@ public class DBQuery {
     /**
      * @return the owning user id, or null when the graph does not exist
      */
-    public String getGraphOwner(String graphID) {
+    public String getGraphOwner(String graphID) throws SQLException {
         if (graphID == null) {
             return null;
         }
@@ -230,7 +230,7 @@ public class DBQuery {
     /**
      * The owner may read. A graph with {@code isshared} set may be read by any authenticated caller.
      */
-    public boolean callerMayRead(String graphID, String userId) {
+    public boolean callerMayRead(String graphID, String userId) throws SQLException {
         if (userId == null || userId.trim().isEmpty()) {
             return false;
         }
@@ -241,7 +241,7 @@ public class DBQuery {
         return isGraphShared(graphID);
     }
 
-    private boolean isGraphShared(String graphID) {
+    private boolean isGraphShared(String graphID) throws SQLException {
         if (graphID == null) {
             return false;
         }
@@ -257,15 +257,15 @@ public class DBQuery {
         return Boolean.parseBoolean(flag.toString().trim());
     }
 
-    public String graphIdOfNode(String nodeID) {
+    public String graphIdOfNode(String nodeID) throws SQLException {
         return lookupGraphId("SELECT GRAPHID FROM CISPACES_NODE WHERE NODEID = ?", nodeID);
     }
 
-    public String graphIdOfEdge(String edgeID) {
+    public String graphIdOfEdge(String edgeID) throws SQLException {
         return lookupGraphId("SELECT GRAPHID FROM CISPACES_EDGE WHERE EDGEID = ?", edgeID);
     }
 
-    private String lookupGraphId(String sql, String id) {
+    private String lookupGraphId(String sql, String id) throws SQLException {
         if (id == null) {
             return null;
         }
