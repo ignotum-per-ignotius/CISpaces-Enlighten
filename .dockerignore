@@ -41,3 +41,7 @@ config/secrets.env
 # Ignore own files. The entrypoint is copied separately and must stay in the context.
 Dockerfile
 .dockerignore
+
+# Compose services have their own build contexts.
+docker/
+docker-compose.yml
