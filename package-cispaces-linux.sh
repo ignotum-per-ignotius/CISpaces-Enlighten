@@ -72,5 +72,47 @@ echo "[OK]"
 echo
 packagename="cispaces-linux-$(date '+%Y%m%d-%H%M%S').zip"
 echo "Creating archive ${packagename}..."
+
+# install-prereqs.sh writes the Derby password into this file. Keep that value
+# out of the zip, then put the local file back so this machine is unchanged.
+context_xml="cispaces/tools/tomcat/conf/context.xml"
+context_backup=
+context_mode=
+restore_packaged_context() {
+    set +x
+    if [ -n "${context_backup:-}" ] && [ -f "$context_backup" ] && [ -n "${context_xml:-}" ]; then
+        cp "$context_backup" "$context_xml"
+        if [ -n "${context_mode:-}" ]; then
+            chmod "$context_mode" "$context_xml"
+        fi
+        rm -f "$context_backup"
+        context_backup=
+    fi
+}
+redact_packaged_context() {
+    set +x
+    if [ ! -f "$context_xml" ]; then
+        return 0
+    fi
+    context_mode=$(stat -c %a "$context_xml")
+    context_backup=$(mktemp)
+    chmod 600 "$context_backup"
+    cp "$context_xml" "$context_backup"
+    awk '{
+        line=$0
+        out=""
+        while (match(line, /password="[^"]*"/)) {
+            out=out substr(line, 1, RSTART-1) "password=\"__CISPACES_DERBY_PASSWORD__\""
+            line=substr(line, RSTART+RLENGTH)
+        }
+        print out line
+    }' "$context_backup" > "$context_xml"
+}
+
+redact_packaged_context
+trap restore_packaged_context EXIT
 zip --symlinks -qr ${packagename} cispaces/ -x "cispaces/config/key.properties"
-if [ $? -eq 0 ]; then echo "[OK]"; else echo "[Failed]"; exit; fi
+zip_status=$?
+restore_packaged_context
+trap - EXIT
+if [ "$zip_status" -eq 0 ]; then echo "[OK]"; else echo "[Failed]"; exit; fi

@@ -31,6 +31,44 @@ fi
 if [ -z "${CISPACES_POSTGRES_PASSWORD:-}" ] || [ -z "${CISPACES_RABBITMQ_PASSWORD:-}" ]; then
     echo "# Export CISPACES_POSTGRES_PASSWORD and CISPACES_RABBITMQ_PASSWORD before starting fact extraction. See config/secrets.env.example."
 fi
+context_xml="${start_dir}/tools/tomcat/conf/context.xml"
+if [ -f "$context_xml" ] && grep -q '__CISPACES_DERBY_PASSWORD__' "$context_xml"; then
+    if [ -z "${CISPACES_DERBY_PASSWORD:-}" ]; then
+        echo "# Export CISPACES_DERBY_PASSWORD before starting. Tomcat context.xml still has the Derby placeholder. The value is not printed."
+    else
+        set +x
+        derby_password_xml=$CISPACES_DERBY_PASSWORD
+        derby_password_xml=${derby_password_xml//&/&amp;}
+        derby_password_xml=${derby_password_xml//</&lt;}
+        derby_password_xml=${derby_password_xml//>/&gt;}
+        derby_password_xml=${derby_password_xml//\"/&quot;}
+        derby_password_xml=${derby_password_xml//\'/&apos;}
+        password_file=$(mktemp)
+        chmod 600 "$password_file"
+        printf '%s' "$derby_password_xml" > "$password_file"
+        unset derby_password_xml
+        context_tmp=$(mktemp)
+        chmod 600 "$context_tmp"
+        # index/substr, not gsub, so characters in the password stay literal.
+        awk -v sentinel="__CISPACES_DERBY_PASSWORD__" -v pwfile="$password_file" '
+            BEGIN {
+                getline password < pwfile
+                close(pwfile)
+            }
+            {
+                out = $0
+                slen = length(sentinel)
+                while ((i = index(out, sentinel)) > 0) {
+                    out = substr(out, 1, i - 1) password substr(out, i + slen)
+                }
+                print out
+            }
+        ' "$context_xml" > "$context_tmp"
+        mv "$context_tmp" "$context_xml"
+        rm -f "$password_file"
+        unset password_file
+    fi
+fi
 
 echo "### - Starting CISPaces "
 
