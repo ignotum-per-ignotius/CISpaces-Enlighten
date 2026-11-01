@@ -89,6 +89,8 @@ $ <CTRL+A>,<D>
 
 ```$ ./stop-cispaces.sh```
 
+The root Dockerfile builds this same workbench on Java 8 with Tomcat 8.0.48, Derby 10.12.1.1, and the same wars; start the container with `CISPACES_DERBY_PASSWORD` set so the entrypoint can write Tomcat `context.xml` at runtime.
+
 ## Third party software
 Cispaces has dependencies on a number of third party software libraries, none of
 these dependencies are distributed here, but are fetched during the build 

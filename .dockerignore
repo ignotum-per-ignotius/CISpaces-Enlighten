@@ -2,8 +2,10 @@
 **/.idea
 **/*.iml
 
-# Nebeans project files
+# Netbeans project files
 **/nbproject
+**/nb-configuration.xml
+**/.settings
 
 # Compiled output
 **/*.class
@@ -14,14 +16,28 @@
 
 # Other internal files
 .DS_STORE
+**/.DS_Store
 cispaces-web-services-integration.iml
 
 # Out folder
 out/*
+out
 
-# CISpaces tools
+# CISpaces tools and local installs
 cispaces/*
+cispaces
+tools
+fact-extraction
 
-# Ignore own files
+# Git metadata and local secrets. The image must not receive key.properties.
+.git
+.github
+**/key.properties
+config/secrets.env
+.env
+**/.env
+*.zip
+
+# Ignore own files. The entrypoint is copied separately and must stay in the context.
 Dockerfile
 .dockerignore
