@@ -41,16 +41,31 @@ jobs:
             echo "CISPACES_POSTGRES_PASSWORD=$(openssl rand -hex 16)"
             echo "CISPACES_RABBITMQ_PASSWORD=$(openssl rand -hex 16)"
           } >> "$GITHUB_ENV"
-      - name: Build images
-        run: docker compose build
+      - name: Build workbench, PostgreSQL, and RabbitMQ images
+        run: docker compose build workbench postgres rabbitmq
+      # Built on its own so the rest of the stack is still tested when the
+      # Stanford downloads fail. The job fails at the end either way.
+      - name: Build fact-extraction image
+        id: fact
+        continue-on-error: true
+        run: docker compose build fact-extraction
       - name: Start the stack
-        run: docker compose up -d
+        run: |
+          if [ "${{ steps.fact.outcome }}" = "success" ]; then
+            echo "EXPECTED_SERVICES=4" >> "$GITHUB_ENV"
+            echo "SMOKE_COMPOSE=1" >> "$GITHUB_ENV"
+            docker compose up -d
+          else
+            echo "EXPECTED_SERVICES=3" >> "$GITHUB_ENV"
+            echo "SMOKE_COMPOSE=0" >> "$GITHUB_ENV"
+            docker compose up -d workbench postgres rabbitmq
+          fi
       - name: Wait for every service to be healthy
         run: |
           for i in $(seq 1 90); do
-            docker compose ps --format '{{.Service}} {{.State}} {{.Health}}' > /tmp/ps.txt
-            cat /tmp/ps.txt | tr '\n' ';'; echo
-            if [ "$(grep -c ' running healthy$' /tmp/ps.txt)" -eq 4 ]; then
+            docker compose ps -a --format '{{.Service}} {{.State}} {{.Health}}' > /tmp/ps.txt
+            tr '\n' ';' < /tmp/ps.txt; echo
+            if [ "$(grep -c ' running healthy$' /tmp/ps.txt)" -eq "$EXPECTED_SERVICES" ]; then
               exit 0
             fi
             if grep -qE ' (exited|dead) ' /tmp/ps.txt; then
@@ -60,8 +75,6 @@ jobs:
           done
           echo "Services did not become healthy in 15 minutes"; exit 1
       - name: Smoke test
-        env:
-          SMOKE_COMPOSE: "1"
         run: python3 scripts/smoke-test.py http://127.0.0.1:8080
       - name: Service logs
         if: always()
@@ -78,3 +91,8 @@ jobs:
       - name: Stop the stack
         if: always()
         run: docker compose down -v
+      - name: Fail when the fact-extraction image did not build
+        if: steps.fact.outcome != 'success'
+        run: |
+          echo "The fact-extraction image failed to build. See that step's log."
+          exit 1
