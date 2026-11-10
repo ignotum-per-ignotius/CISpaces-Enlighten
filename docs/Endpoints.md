@@ -219,6 +219,8 @@ Source: `provgraphs/src/plots/PlotProvServlet.java`, mapped in `provgraphs/WebCo
 
 Source: `info/src/info/INFOServlet.java`, `INFInputServlet.java`, `InfoServHttp.java`, and `InfoServQueryHttp.java`. Jersey package `info`, mapped to `/rest/*`. The two `HttpServlet` classes are also mapped by `@WebServlet`.
 
+Every route below requires a JWT. `web.xml` maps `infofilters.JwtServletFilter` to `/*`, so the Jersey resources, the two `HttpServlet` classes, and the hello pages all return `401` without a bearer token signed with the shared key.
+
 - `GET info/rest/GetInfo`
 
   HTML hello page.

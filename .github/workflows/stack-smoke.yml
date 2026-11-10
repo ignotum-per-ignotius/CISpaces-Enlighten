@@ -1,0 +1,98 @@
+name: Stack smoke test
+
+# Builds every Maven module, builds the four Compose images, starts the stack,
+# and drives the calls the web UI makes. Slower than the unit tests, so it runs
+# on pull requests, on master, and on demand.
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  maven-all-modules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "8"
+          cache: maven
+      - name: Install Maven 3.8.8
+        run: |
+          curl -fsSL -o /tmp/maven.tgz https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/3.8.8/apache-maven-3.8.8-bin.tar.gz
+          mkdir -p "$HOME/maven"
+          tar -xzf /tmp/maven.tgz -C "$HOME/maven"
+          echo "$HOME/maven/apache-maven-3.8.8/bin" >> "$GITHUB_PATH"
+      - name: Build and test every module
+        run: mvn -B package
+
+  compose-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate throwaway passwords
+        run: |
+          {
+            echo "CISPACES_DERBY_PASSWORD=$(openssl rand -hex 16)"
+            echo "CISPACES_POSTGRES_PASSWORD=$(openssl rand -hex 16)"
+            echo "CISPACES_RABBITMQ_PASSWORD=$(openssl rand -hex 16)"
+          } >> "$GITHUB_ENV"
+      - name: Build workbench, PostgreSQL, and RabbitMQ images
+        run: docker compose build workbench postgres rabbitmq
+      # Built on its own so the rest of the stack is still tested when the
+      # Stanford downloads fail. The job fails at the end either way.
+      - name: Build fact-extraction image
+        id: fact
+        continue-on-error: true
+        run: docker compose build fact-extraction
+      - name: Start the stack
+        run: |
+          if [ "${{ steps.fact.outcome }}" = "success" ]; then
+            echo "EXPECTED_SERVICES=4" >> "$GITHUB_ENV"
+            echo "SMOKE_COMPOSE=1" >> "$GITHUB_ENV"
+            docker compose up -d
+          else
+            echo "EXPECTED_SERVICES=3" >> "$GITHUB_ENV"
+            echo "SMOKE_COMPOSE=0" >> "$GITHUB_ENV"
+            docker compose up -d workbench postgres rabbitmq
+          fi
+      - name: Wait for every service to be healthy
+        run: |
+          for i in $(seq 1 90); do
+            docker compose ps -a --format '{{.Service}} {{.State}} {{.Health}}' > /tmp/ps.txt
+            tr '\n' ';' < /tmp/ps.txt; echo
+            if [ "$(grep -c ' running healthy$' /tmp/ps.txt)" -eq "$EXPECTED_SERVICES" ]; then
+              exit 0
+            fi
+            if grep -qE ' (exited|dead) ' /tmp/ps.txt; then
+              echo "A service stopped"; exit 1
+            fi
+            sleep 10
+          done
+          echo "Services did not become healthy in 15 minutes"; exit 1
+      - name: Smoke test
+        run: python3 scripts/smoke-test.py http://127.0.0.1:8080
+      - name: Service logs
+        if: always()
+        run: |
+          docker compose ps -a
+          for s in workbench postgres rabbitmq fact-extraction; do
+            echo "::group::$s"
+            docker compose logs --no-color --tail 400 "$s" || true
+            echo "::endgroup::"
+          done
+          echo "::group::tomcat logs"
+          docker compose exec -T workbench sh -c 'tail -n 300 /opt/cispaces/tools/tomcat/logs/*.log /opt/cispaces/tools/tomcat/logs/catalina.out 2>/dev/null' || true
+          echo "::endgroup::"
+      - name: Stop the stack
+        if: always()
+        run: docker compose down -v
+      - name: Fail when the fact-extraction image did not build
+        if: always() && steps.fact.outcome != 'success'
+        run: |
+          echo "The fact-extraction image failed to build. See that step's log."
+          exit 1

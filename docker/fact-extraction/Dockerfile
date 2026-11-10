@@ -31,20 +31,33 @@ RUN apt-get update \
         'https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl' \
     && python -c 'import en_core_web_sm, spacy; spacy.load("en_core_web_sm")' \
     && python -c 'import nltk; nltk.download("stopwords", download_dir="/opt/stanford/nltk_data"); nltk.download("names", download_dir="/opt/stanford/nltk_data")' \
-    && mkdir -p /tmp/stanford \
+    && rm -rf /var/lib/apt/lists/*
+
+# The Stanford downloads are their own layer so a failed download or a changed
+# archive layout is reported on its own line and does not redo the pip install.
+RUN mkdir -p /tmp/stanford \
     && curl -fsSL -o /tmp/stanford/postagger.zip \
         'https://web.archive.org/web/20170514005357id_/https://nlp.stanford.edu/software/stanford-postagger-full-2016-10-31.zip' \
     && curl -fsSL -o /tmp/stanford/parser.zip \
         'https://web.archive.org/web/20170516192721id_/https://nlp.stanford.edu/software/stanford-parser-full-2016-10-31.zip' \
     && curl -fsSL -o /tmp/stanford/stanford-english-corenlp-2016-10-31-models.jar \
         'https://repo1.maven.org/maven2/edu/stanford/nlp/stanford-corenlp/3.7.0/stanford-corenlp-3.7.0-models-english.jar' \
+    && ls -l /tmp/stanford \
     && unzip -q /tmp/stanford/postagger.zip -d /opt/stanford \
     && unzip -q /tmp/stanford/parser.zip -d /opt/stanford \
     && mv /tmp/stanford/stanford-english-corenlp-2016-10-31-models.jar \
         /opt/stanford/stanford-parser-full-2016-10-31/stanford-english-corenlp-2016-10-31-models.jar \
-    && test -f /opt/stanford/stanford-postagger-full-2016-10-31/stanford-postagger-3.7.0.jar \
-    && test -f /opt/stanford/stanford-parser-full-2016-10-31/stanford-parser-3.7.0.jar \
-    && rm -rf /tmp/stanford /var/lib/apt/lists/* \
+    && rm -rf /tmp/stanford \
+    && ls /opt/stanford/stanford-postagger-full-2016-10-31 /opt/stanford/stanford-parser-full-2016-10-31
+
+# The 2016-10-31 parser archive ships stanford-parser.jar. Only its models,
+# sources, and javadoc jars carry 3.7.0 in the file name.
+RUN for jar in \
+        /opt/stanford/stanford-postagger-full-2016-10-31/stanford-postagger-3.7.0.jar \
+        /opt/stanford/stanford-parser-full-2016-10-31/stanford-parser.jar \
+        /opt/stanford/stanford-parser-full-2016-10-31/stanford-parser-3.7.0-models.jar; do \
+        if [ ! -f "$jar" ]; then echo "missing expected Stanford jar: $jar" >&2; exit 1; fi; \
+    done \
     && useradd --system --home-dir /opt/fact-extraction --shell /usr/sbin/nologin factextract
 
 WORKDIR /opt/fact-extraction
