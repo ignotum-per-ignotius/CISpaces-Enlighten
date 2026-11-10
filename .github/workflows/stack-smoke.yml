@@ -92,7 +92,7 @@ jobs:
         if: always()
         run: docker compose down -v
       - name: Fail when the fact-extraction image did not build
-        if: always() && steps.fact.outcome != 'success'
+        if: always() && steps.fact.outcome == 'failure'
         run: |
           echo "The fact-extraction image failed to build. See that step's log."
           exit 1
