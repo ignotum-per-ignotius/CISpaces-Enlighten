@@ -80,8 +80,10 @@ rabbitmq-server &
 server_pid=$!
 
 ready=0
+# ping answers as soon as the Erlang node is up, before the rabbit application
+# has booted. list_users and add_user need the application, so wait for that.
 for _ in $(seq 1 60); do
-    if rabbitmq-diagnostics -q ping >/dev/null 2>&1; then
+    if rabbitmq-diagnostics -q check_running >/dev/null 2>&1; then
         ready=1
         break
     fi

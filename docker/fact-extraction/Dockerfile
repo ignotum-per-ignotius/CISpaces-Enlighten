@@ -50,9 +50,12 @@ RUN mkdir -p /tmp/stanford \
     && rm -rf /tmp/stanford \
     && ls /opt/stanford/stanford-postagger-full-2016-10-31 /opt/stanford/stanford-parser-full-2016-10-31
 
+# The 2016-10-31 parser archive ships stanford-parser.jar. Only its models,
+# sources, and javadoc jars carry 3.7.0 in the file name.
 RUN for jar in \
         /opt/stanford/stanford-postagger-full-2016-10-31/stanford-postagger-3.7.0.jar \
-        /opt/stanford/stanford-parser-full-2016-10-31/stanford-parser-3.7.0.jar; do \
+        /opt/stanford/stanford-parser-full-2016-10-31/stanford-parser.jar \
+        /opt/stanford/stanford-parser-full-2016-10-31/stanford-parser-3.7.0-models.jar; do \
         if [ ! -f "$jar" ]; then echo "missing expected Stanford jar: $jar" >&2; exit 1; fi; \
     done \
     && useradd --system --home-dir /opt/fact-extraction --shell /usr/sbin/nologin factextract
