@@ -16,6 +16,7 @@ from stanford_engine import (
     SEED_FILTER,
     StanfordOpenIE,
     seed_tuples_from_extractions,
+    situation_for,
 )
 
 
@@ -118,6 +119,15 @@ class AliasTest(unittest.TestCase):
         self.assertEqual(seeds[0][-1], ("ARGUMENT", "queues"))
 
 
+class SituationTest(unittest.TestCase):
+    def test_time_is_tagged_without_the_stanford_jars(self):
+        _places, times = situation_for("The police arrested three smugglers in Kabul on Tuesday .")
+        self.assertIn("tuesday", " ".join(times).lower())
+
+    def test_empty_sentence_has_no_situation(self):
+        self.assertEqual(situation_for(""), ([], []))
+
+
 @unittest.skipUnless(TAGGER and os.path.isdir(TAGGER), "Stanford tagger directory is not set")
 class StanfordExtractorTest(unittest.TestCase):
     @classmethod
@@ -135,6 +145,14 @@ class StanfordExtractorTest(unittest.TestCase):
         self.assertEqual(triple.pattern, PATTERN)
         self.assertTrue(any(token["pos"].startswith("VB") for token in triple.tokens))
         self.assertTrue(any(token["pos"].startswith("NN") and token["t"] == "NYSE" for token in triple.tokens))
+
+    def test_facts_carry_the_time_named_in_the_sentence(self):
+        triples = self.engine.extract_triples(
+            "The police arrested three smugglers in Kabul on Tuesday.")
+        self.assertTrue(triples, "ReVerb patterns produced no triple")
+        self.assertTrue(
+            any("tuesday" in " ".join(triple.times).lower() for triple in triples),
+            "no fact carries the time; /fewsservlet/situations would stay empty")
 
     def test_negation_from_the_tagged_token(self):
         triples = self.engine.extract_triples("The hospital did not evacuate patients.")

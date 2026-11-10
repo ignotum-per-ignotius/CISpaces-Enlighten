@@ -36,6 +36,7 @@ import openiepy.comp_sem_lib
 import openiepy.openie_lib
 import soton_corenlppy.common_parse_lib
 
+import extractor
 from extractor import Triple
 
 # Reconstruction marker. Do not report this module as Southampton 0.1.0.
@@ -43,6 +44,45 @@ IMPLEMENTATION = "soton_corenlppy-1.0.0-alias"
 SEED_FILTER = "reconstructed-get_seed_tuples_from_extractions"
 PATTERN = "soton-reverb-3.7.0"
 _NEGATION = {"not", "n't", "never", "no"}
+
+_SITUATION_NLP = None
+_SITUATION_UNAVAILABLE = False
+
+
+def situation_for(sentence):
+    """Places and times mentioned in one sentence.
+
+    The Stanford path extracts the subject-relation-object facts. It has no
+    place or time tagger of its own: the 2017 ``sit_assesspy`` wheel that did
+    that job was never published. The spaCy model already in the image tags
+    them here, with the same rules the spaCy engine uses, so
+    ``phase1_situation`` is filled whichever engine extracts the facts.
+    Returns two empty lists when the model cannot be loaded.
+    """
+    global _SITUATION_NLP, _SITUATION_UNAVAILABLE
+    if _SITUATION_UNAVAILABLE or not sentence:
+        return [], []
+    if _SITUATION_NLP is None:
+        try:
+            import spacy
+            _SITUATION_NLP = spacy.load(extractor.MODEL_NAME)
+        except Exception:
+            logging.getLogger("cispaces.stanford_openie").warning(
+                "spaCy model %s is not available; facts are stored without places or times",
+                extractor.MODEL_NAME)
+            _SITUATION_UNAVAILABLE = True
+            return [], []
+    places = []
+    times = []
+    for sent in _SITUATION_NLP(sentence).sents:
+        found_places, found_times = extractor._situation(sent)
+        for place in found_places:
+            if place not in places:
+                places.append(place)
+        for time_label in found_times:
+            if time_label not in times:
+                times.append(time_label)
+    return places, times
 
 
 def _is_negation_token(token):
@@ -290,6 +330,7 @@ class StanfordOpenIE:
             )
             seeds = seed_tuples_from_extractions(extractions, patterns.setSeedTuples)
             sentence = " ".join(token for token, _pos in sent)
+            places, times = situation_for(sentence)
             seen = set()
             cursor = 0
             for seed in seeds:
@@ -307,8 +348,8 @@ class StanfordOpenIE:
                     negated=negated,
                     genuine=None,
                     tokens=token_rows,
-                    places=[],
-                    times=[],
+                    places=list(places),
+                    times=list(times),
                     pattern=PATTERN,
                 ))
         return triples

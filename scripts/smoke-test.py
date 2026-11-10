@@ -89,10 +89,12 @@ status, _, _ = call("GET", "/login.html")
 check("UI: GET /login.html", status == 200, "status %s" % status)
 
 # ---------------------------------------------------------------- hello pages
-for name, path in [("VC", "/VC/rest/getInfo"), ("ers", "/ers/rest/WriteRules"),
-                   ("PROVSIMP", "/PROVSIMP/rest/ProcProv"), ("FEWS", "/fewsservlet/hello")]:
+# FEWS answers its hello route with 418 on purpose (FEWSServlet.hello).
+for name, path, expected in [("VC", "/VC/rest/getInfo", 200), ("ers", "/ers/rest/WriteRules", 200),
+                             ("PROVSIMP", "/PROVSIMP/rest/ProcProv", 200),
+                             ("FEWS", "/fewsservlet/hello", 418)]:
     status, _, text = call("GET", path)
-    check("%s: service answers its hello route" % name, status == 200,
+    check("%s: service answers its hello route" % name, status == expected,
           "GET %s -> %s %s" % (path, status, text[:300]))
 
 # ---------------------------------------------------------------- auth
@@ -231,6 +233,8 @@ check("provgraphs: provenance plot without a token is refused", status == 401, "
 status, _, text = call("POST", "/info/rest/GetInfo", {"action": "getinfo"})
 check("info: POST without a token is refused", status == 401,
       "status %s (the info war is deployed and answers unauthenticated callers) %s" % (status, text[:200]))
+status, _, _ = call("GET", "/info/InfoServQueryHttp")
+check("info: annotated servlet without a token is refused", status == 401, "status %s" % status)
 
 # ---------------------------------------------------------------- AI endpoint
 status, _, text = call("POST", "/VC/ai/complete", {"prompt": "Say hello."})
